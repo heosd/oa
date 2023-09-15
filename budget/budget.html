@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        @page {
+            size: A4;
+            marks: crop cross;
+        }
+
+        .page {
+            width: 210mm;
+            height: 297mm;
+            margin: 0 auto;
+            border: 1px solid black;
+            display: block;
+            padding: 1.5cm 1.5cm 2cm 1.5cm;
+        }
+
+        .color1 {
+            color: #DCE2F0;
+        }
+
+        .bg1 {
+            background-color: #DCE2F0;
+        }
+
+        .color2 {
+            color: #50586C;
+        }
+
+        .bg2 {
+            background-color: #50586C;
+        }
+
+        .font1-fantasy {
+            color: #1E4174;
+            font-family: fantasy;
+        }
+
+        body {
+            font-family: "Open Sans", sans-serif;
+            line-height: 1.25;
+        }
+
+
+        table {
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            border: 1px solid #ccc;
+            padding: 8px;
+        }
+
+        tr:hover {
+            background: #50586C;
+            color: #DCE2F0;
+        }
+
+        caption {
+            text-align: left;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Summary -->
+    <section class="page">
+        <div class="color2">
+            <h1>Budget data report</h1>
+
+            <table style="width: 100%; text-align: center;">
+                <caption>Data source - <span id="sum-count-datasource"></span> items. first <span
+                        id="sum-count-first"></span> items</caption>
+                <thead>
+                    <tr id="sum-tr-rowcol">
+                    </tr>
+                </thead>
+                <tbody id="sum-area-datasource"></tbody>
+            </table>
+
+            <table>
+                <caption>Option input</caption>
+                <thead>
+                    <tr>
+                        <th>Attr</th>
+                        <th>Value</th>
+                        <th>Valid</th>
+                        <th>Invalid</th>
+                        <th>Groups</th>
+                    </tr>
+                </thead>
+                <tbody id="sum-area-opt"></tbody>
+            </table>
+        </div>
+
+
+    </section>
+
+    <section class="page">
+        <div id="sum-date-plot"></div>
+
+        <div id="sum-type-plot"></div>
+    </section>
+
+    <div id="area-years" class="page"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6"></script>
+
+    <script src="../js/Generator.js"></script>
+    <script src="../js/DataBudget.js"></script>
+
+    <script>
+        setTimeout(async () => {
+            const data = await Generator.Generate(300);
+
+            const budget = new DataBudget();
+            budget.dataSource = data;
+            budget.opt = {
+                date: 'date',
+                price: 'price',
+                count: 'count',
+                type: ['name', 'type1', 'type2']
+            }
+
+            budget.processClone();
+            budget.execDate();
+            budget.execType();
+
+            console.log(budget.opt);
+            console.log(budget.cloned);
+            console.log(budget.ssDate);
+            console.log(budget.ssType);
+
+            refreshSummary(budget);
+        }, 1);
+
+        function createE(tag, text) {
+            const e = document.createElement(tag);
+            if (text) {
+                e.textContent = text;
+            }
+
+            return e;
+        }
+
+        function refreshSummary(budget) {
+            // -- data source
+            document.getElementById('sum-count-datasource').textContent = budget.dataSource.length;
+
+            // cols
+            const trHeader = document.getElementById('sum-tr-rowcol');
+            const first = budget.dataSource[0];
+            const keys = Object.keys(first);
+            keys.forEach(k => trHeader.appendChild(createE('th', k)));
+
+            // 5 items or less
+            const maxLen = Math.min(5, budget.dataSource.length);
+            document.getElementById('sum-count-first').textContent = maxLen;
+            const areaDataSource = document.getElementById('sum-area-datasource');
+            for (let i = 0; i < maxLen; i++) {
+                const item = budget.dataSource[i];
+                const tr = document.createElement('tr');
+                keys.forEach(k => {
+                    const str = item[k].toString();
+                    let short = item[k].toString().substring(0, 8);
+                    if (8 < str.length) {
+                        short = short + '..';
+                    }
+                    const th = createE('th', short);
+                    th.setAttribute('title', str);
+                    tr.appendChild(th);
+                });
+                areaDataSource.appendChild(tr);
+            }
+
+            // -- option
+            const opt = budget.opt;
+            const areaOpt = document.getElementById('sum-area-opt');
+
+            // preprocess
+            const dateGroups = budget.ssDate.list.map(d => `${d.y} [${d.count}]`).join(', ');
+
+            const listOptions =
+                [
+                    ['date', opt.date, budget.ssDate.valid.toString(), budget.ssDate.invalid.toString(), dateGroups],
+                    ['price', opt.price, '-', '-', '-'],
+                    ['count', opt.count, '-', '-', '-'],
+                ];
+
+            budget.ssType.forEach(d => {
+                const typeGroups = d.list.map(typeItem => `${typeItem.key} [${typeItem.count}]`).join(', ');
+                const item = ['type', d.colOrigin, '-', '-', typeGroups];
+                listOptions.push(item);
+            });
+
+            listOptions.forEach(line => {
+                const trOpt = document.createElement('tr');
+                line.forEach(d => {
+                    const td = createE('td', d);
+                    trOpt.appendChild(td);
+                });
+                areaOpt.appendChild(trOpt);
+            });
+
+            // max range
+            const listMax = [];
+
+            if (budget.optDate) {
+                listMax.push(Math.max(...budget.ssDate.list.map(d => d.sum)));
+            }
+
+            if (budget.ssType && 0 < budget.ssType.length) {
+                budget.ssType.forEach(ss => {
+                    listMax.push(Math.max(...ss.list.map(d => d.sum)));
+                });
+            }
+
+            const max = Math.max(...listMax);
+            const range = roundUp(max, 2);
+
+            // -- Plot date
+            if (budget.optDate) {
+                const pplot = document.getElementById('sum-date-plot');
+                const plot = createDatePlot(budget, range);
+                pplot.appendChild(plot);
+            }
+
+            // -- Plot Types
+            if (budget.ssType && 0 < budget.ssType.length) {
+                const pplot = document.getElementById('sum-type-plot');
+                pplot.innerHTML = '';
+
+                budget.ssType.forEach((d, i) => {
+                    const svg = createTypePlot(budget, i, range);
+                    pplot.appendChild(svg);
+                });
+
+            } else {
+                // no types found
+                document.getElementById('sum-types').textContent = '0';
+            }
+
+            // -- Plot years
+            const plot = createDatePlotYears(budget, range);
+            document.getElementById('area-years').appendChild(plot);
+        }
+
+        function createDatePlot(budget, maxRange) {
+            // plot
+            const plot = Plot.plot({
+                style: { fontSize: 20 },
+                grid: true,
+                marginLeft: 100,
+                marginBottom: 45,
+                marginTop: 35,
+                marginRight: 20,
+                x: { ticks: 3, label: 'Sum', domain: [0, maxRange] },
+                y: { label: 'Year', type: 'band' },
+                marks: [
+                    Plot.frame(),
+                    Plot.barX(budget.ssDate.list, {
+                        x: "sum",
+                        y: "y",
+                        sort: { x: "y", reverse: false }
+                    }),
+                    Plot.text(budget.ssDate.list, {
+                        text: 'sum',
+                        x: 'sum',
+                        y: 'y',
+                        textAnchor: 'start',
+                        dx: 5,
+                        fontSize: 15,
+                    }),
+                    Plot.text(['Total spent by years'], { frameAnchor: 'top', dy: -20 }),
+                ]
+            });
+
+            return plot;
+        }
+
+        function createTypePlot(budget, idx, maxRange) {
+            const src = budget.ssType[idx];
+            // plot
+            const plot = Plot.plot({
+                style: { fontSize: 15 },
+                grid: true,
+                marginLeft: 100,
+                marginBottom: 45,
+                marginTop: 35,
+                marginRight: 20,
+                x: { ticks: 3, label: 'Sum', domain: [0, maxRange] },
+                y: {
+                    label: src.colOrigin,
+                    tickFormat: d => {
+                        if (5 <= d.length) {
+                            return d.substring(0, 4) + '..';
+                        } else {
+                            return d;
+                        }
+                    },
+                },
+                marks: [
+                    Plot.frame(),
+                    Plot.barX(src.list, {
+                        x: "sum",
+                        y: "key",
+                        sort: { y: "x", reverse: true, limit: 5 }
+                    }),
+                    Plot.text(src.list, {
+                        text: 'sum',
+                        x: 'sum',
+                        y: 'key',
+                        textAnchor: 'start',
+                        dx: 5,
+                        // fill: 'white',
+                        fontSize: 10,
+                    }),
+                    Plot.text([`Top 5 spent by ${src.colOrigin}`], { frameAnchor: 'top', dy: -20 }),
+                ]
+            });
+
+            return plot;
+        }
+
+        function createDatePlotYears(budget, maxRange) {
+            // plot
+            const plot = Plot.plot({
+                style: { fontSize: 15 },
+                grid: true,
+                marginLeft: 100,
+                marginBottom: 45,
+                marginTop: 35,
+                marginRight: 50,
+                x: { ticks: 3, label: 'Sum', },
+                y: { label: 'Year', type: 'band' },
+                facet: {label: null},
+                fy: {tickFormat: d => d.toString()},
+                marks: [
+                    Plot.frame(),
+                    Plot.barX(budget.cloned, {
+                        x: "v",
+                        y: "type2",
+                        fy: 'd_y',
+                        // sort: { x: "y", reverse: false }
+                    }),
+                    // Plot.text(budget.ssDate.list, {
+                    //     text: 'sum',
+                    //     x: 'sum',
+                    //     y: 'y',
+                    //     textAnchor: 'start',
+                    //     dx: 5,
+                    //     fontSize: 15,
+                    // }),
+                    // Plot.text(['Total spent by years'], { frameAnchor: 'top', dy: -20 }),
+                ]
+            });
+
+            return plot;
+        }
+
+        function roundUp(v, plus = 0) {
+            let base = 10;
+
+            while (v >= base) {
+                base = base * 10;
+            }
+
+            base = base / 10;
+
+            const p = Math.floor(v / base);
+            return (p + plus) * base;
+        }
+    </script>
+</body>
+
+</html>
