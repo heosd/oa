@@ -316,14 +316,92 @@ class DataBudget {
         const ssDate = {
             valid: scValid.object.valid.c,
             invalid: scValid.object.invalid.c,
-            range: range,
+            _validRange: range,
             list: scYearResult,
             listMonth: scMonth.result,
-            descList: `only in valid range ${range[0]} ~ ${range[1]}, sort by year`,
-            descListMonth: `only in valid range ${range[0]} ~ ${range[1]}, sort by count`,
+            _descList: `only in valid range ${range[0]} ~ ${range[1]}, sort by year`,
+            _descListMonth: `only in valid range ${range[0]} ~ ${range[1]}, sort by count`,
         }
 
         this.ssDate = ssDate;
+    }
+
+    // price, count, value
+    execPCV() {
+        let src = this.cloned;
+
+        this.ssPCV = {
+            pvalid: 0,
+            pinvalid: 0,
+            cvalid: 0,
+            cinvalid: 0,
+            vvalid: 0,
+            vinvalid: 0,
+            colPrice: '',
+            colCount: '',
+            prange: [Number.MAX_SAFE_INTEGER, Number.MIN_SAFE_INTEGER],
+            crange: [Number.MAX_SAFE_INTEGER, Number.MIN_SAFE_INTEGER],
+            vrange: [Number.MAX_SAFE_INTEGER, Number.MIN_SAFE_INTEGER],
+            // colValue: '', // no column for value now
+        }
+
+        if (this.optPrice) {
+            src.forEach(d => {
+                this.ssPCV.colPrice = this.optPrice;
+                if (isNaN(d.p)) {
+                    this.ssPCV.pinvalid++;
+                } else {
+                    this.ssPCV.pvalid++;
+
+                    // min max
+                    if (this.ssPCV.prange[0] > d.p) {
+                        this.ssPCV.prange[0] = d.p;
+                    }
+
+                    if (this.ssPCV.prange[1] < d.p) {
+                        this.ssPCV.prange[1] = d.p;
+                    }
+                }
+            });
+        }
+
+        if (this.optCount) {
+            src.forEach(d => {
+                this.ssPCV.colCount = this.optCount;
+                if (isNaN(d.c)) {
+                    this.ssPCV.cinvalid++;
+                } else {
+                    this.ssPCV.cvalid++;
+
+                    // min max
+                    if (this.ssPCV.crange[0] > d.c) {
+                        this.ssPCV.crange[0] = d.c;
+                    }
+
+                    if (this.ssPCV.crange[1] < d.c) {
+                        this.ssPCV.crange[1] = d.c;
+                    }
+
+                }
+            });
+        }
+
+        src.forEach(d => {
+            if (isNaN(d.v)) {
+                this.ssPCV.vinvalid++;
+            } else {
+                this.ssPCV.vvalid++;
+
+                // min max
+                if (this.ssPCV.vrange[0] > d.v) {
+                    this.ssPCV.vrange[0] = d.v;
+                }
+
+                if (this.ssPCV.vrange[1] < d.v) {
+                    this.ssPCV.vrange[1] = d.v;
+                }
+            }
+        });
     }
 
     execType() {
@@ -336,10 +414,23 @@ class DataBudget {
             return scInstance;
         });
 
+        // -- assert init - valid, invalid count for keys
+        const assert = {};
+        this.dataClonedTypes.forEach(k => assert[k] = { valid: 0, invalid: 0 });
+
         // -- each line, each type, sum up v
         src.forEach(d => {
             this.dataClonedTypes.forEach((k, i) => {
                 const value = d[k];
+
+                // type key assertion
+                if (undefined === typeof valid) {
+                    assert[k].invalid++;
+                } else {
+                    assert[k].valid++;
+                }
+
+                // sum up summary count
                 sc[i].add(value, d.v);
             });
         });
@@ -347,10 +438,14 @@ class DataBudget {
         // -- colOrigin is name of original column like 'name'
         // -- col starts 'type0'
         this.ssType = sc.map(d => {
+            const col = d.getKV('col');
             const obj = {
                 colOrigin: d.getKV('colOrigin'),
-                col: d.getKV('col'),
+                col: col,
+                valid: assert[col].valid,
+                invalid: assert[col].invalid,
                 list: d.result,
+                _descValid: 'assert line has its type name, check undefined only'
             }
 
             return obj;
