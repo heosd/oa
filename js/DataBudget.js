@@ -220,65 +220,6 @@ class DataBudget {
         return this.dataCloned;
     }
 
-    // execYear(filter) {
-    //     let src = this.cloned;
-    //     if (filter) {
-    //         src = src.filter(filter);
-    //     }
-
-    //     const rr = d3.rollup(this.cloned,
-    //         (list) => {
-    //             const first = list[0];
-    //             const sum = d3.sum(list, d => d.v);
-    //             const count = list.length;
-    //             const result = {
-    //                 sum: sum,
-    //                 count: count,
-    //                 y: first.d_y,
-    //                 group: first.d_y,
-    //                 desc: {
-    //                     count: 'count of items within year',
-    //                     sum: 'sum of (price * count)',
-    //                     y: 'number type year 2020'
-    //                 }
-    //             }
-
-    //             return result;
-    //         }, (d) => d.d_y);
-
-    //     const result = Array.from(rr.values());
-    //     this.ssYear = result;
-    // }
-
-    // execMonth(filter) {
-    //     let src = this.cloned;
-    //     if (filter) {
-    //         src = src.filter(filter);
-    //     }
-    //     const rr = d3.rollup(src,
-    //         (list) => {
-    //             const first = list[0];
-    //             const sum = d3.sum(list, d => d.v);
-    //             const count = list.length;
-    //             const result = {
-    //                 sum: sum,
-    //                 count: count,
-    //                 ym: first.d_ym,
-    //                 group: first.d_ym,
-    //                 desc: {
-    //                     count: 'count of items within year',
-    //                     sum: 'sum of (price * count)',
-    //                     ym: 'number type year and month 2020-03'
-    //                 }
-    //             }
-
-    //             return result;
-    //         }, (d) => d.d_ym);
-
-    //     const result = Array.from(rr.values());
-    //     this.ssMonth = result;
-    // }
-
     execDate(yearOffset = 100) {
         let src = this.cloned;
 
@@ -450,5 +391,73 @@ class DataBudget {
 
             return obj;
         });
+    }
+
+    execYears() {
+        this.ssDate.list.forEach(d => {
+            const year = parseInt(d.y);
+            this.execYear(year);
+        });
+    }
+
+    execYear(year) {
+        let src = this.cloned;
+        const y = parseInt(year);
+        const list = src.filter(d => d.d_y === y);
+
+        if(!this.ssYear) {
+            this.ssYear = {};
+        }
+
+        if(0 === list) {
+            this.ssYear[y] = undefined;
+            return undefined;
+        }
+
+        const sc = this.dataClonedTypes.map((d, i) => {
+            const scInstance = new SummaryCount();
+            scInstance.setKV('colOrigin', this.optType[i]);
+            scInstance.setKV('col', d);
+            return scInstance;
+        });
+
+        // -- assert init - valid, invalid count for keys
+        const assert = {};
+        this.dataClonedTypes.forEach(k => assert[k] = { valid: 0, invalid: 0 });
+
+        // -- each line, each type, sum up v
+        list.forEach(d => {
+            this.dataClonedTypes.forEach((k, i) => {
+                const value = d[k];
+
+                // type key assertion
+                if (undefined === typeof valid) {
+                    assert[k].invalid++;
+                } else {
+                    assert[k].valid++;
+                }
+
+                // sum up summary count
+                sc[i].add(value, d.v);
+            });
+        });
+
+        // -- colOrigin is name of original column like 'name'
+        // -- col starts 'type0'
+        const ssType = sc.map(d => {
+            const col = d.getKV('col');
+            const obj = {
+                colOrigin: d.getKV('colOrigin'),
+                col: col,
+                valid: assert[col].valid,
+                invalid: assert[col].invalid,
+                list: d.result,
+                _descValid: 'assert line has its type name, check undefined only'
+            }
+
+            return obj;
+        });
+
+        this.ssYear[y] = ssType;
     }
 }

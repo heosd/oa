@@ -75,6 +75,7 @@
 
 <body>
 
+    <div id="area-test"></div>
     <div id="area-plot-total"></div>
     <div id="area-plot-year"></div>
     <section id="testarea" class="page">
@@ -115,7 +116,7 @@
 
     </section>
 
-    <div id="area-years" class="page"></div>
+
 
 
 
@@ -142,12 +143,14 @@
             budget.execDate();
             budget.execPCV();
             budget.execType();
+            budget.execYears();
 
             console.log(budget.opt);
             console.log(budget.cloned);
             console.log(budget.ssDate);
             console.log(budget.ssPCV);
             console.log(budget.ssType);
+            console.log(budget.ssYear);
 
             refreshSummary(budget);
         }, 1);
@@ -274,7 +277,7 @@
                 pplot.innerHTML = '';
 
                 budget.ssType.forEach((d, i) => {
-                    const plot = createTypePlot(budget, i, range);
+                    const plot = createTypePlot(d, d3.schemeAccent[i], range);
                     appendChildPage(plotTotal, plot);
                     // pplot.appendChild(svg);
                 });
@@ -284,59 +287,17 @@
                 document.getElementById('sum-types').textContent = '0';
             }
 
-            // const plot0 = createPlotY(rollupxy(budget.cloned, d => d.d_y.toString()), {
-            //     maxRange: range,
-            //     title: 'year',
-            // });
+            const svg = createTypePlot2(budget.cloned);
+            appendChildPage(plotTotal, svg);
 
-            // const plot1 = createPlotY(rollupxy(budget.cloned, 'type0'), {
-            //     maxRange: range,
-            //     title: 'by Type 0',
-            // });
-            // const plot2 = createPlotY(rollupxy(budget.cloned, 'type1'), {
-            //     maxRange: range,
-            //     title: 'by Type 1'
-            // });
+        }
 
-            const areaYears = document.getElementById('area-years');
-            // const plots = [plot0, plot1, plot2].map(d => Plot.plot(d));
-            // plots.forEach(p => areaYears.appendChild(p));
-
-            // top 5 types
-            for (let i = 0; i < budget.ssType.length; i++) {
-                const type = budget.ssType[i];
-                const listSorted = type.list.toSorted((a, b) => b.sum - a.sum);
-                const list = structuredClone(type.list);
-
-                // console.log(listSorted);
-                // console.log(list);
-                const top5 = listSorted.filter((d, i) => i < 5).map(d => {
-                    return {
-                        x: d.sum,
-                        y: d.key
-                    }
-                });
-
-                // console.log(top5);
-
-                const obj = createPlotY(top5, {
-                    maxRange: range,
-                    title: type.col,
-                });
-
-                const plot = Plot.plot(obj);
-                areaYears.appendChild(plot);
-            }
-
-
-            // areaYears.appendChild(plot1);
-            // const rect = structuredClone(areaYears.getBoundingClientRect());
-            // if (1300 < rect.height) {
-            //     console.log('No more');
-            // } else {
-            //     areaYears.appendChild(plot2);
-            //     console.log(areaYears.getBoundingClientRect());
-            // }
+        function refreshLatestYear(budget, range) {
+            // console.log(budget, range);
+            // const latestYear = parseInt(budget.ssDate.list.at(-1).y);
+            // const list = budget.dataCloned.filter(d => d.y === latestYear);
+            // console.log(list);
+            // console.log(late/stYear);
         }
 
 
@@ -383,9 +344,8 @@
             return Plot.plot(obj);
         }
 
-        function createTypePlot(budget, idx, maxRange) {
-            const src = budget.ssType[idx];
-            const fill = d3.schemeAccent[idx];
+        function createTypePlot(dataSource, fill, maxRange) {
+            const src = dataSource;
 
             // plot
             const obj = getDefaultPlot();
@@ -400,13 +360,23 @@
                     }
                 },
             };
+            obj.color = {
+                scheme: 'RdBu'
+            };
+
             obj.marks.push(
                 Plot.barX(src.list, {
                     x: "sum",
                     y: "key",
-                    fill: fill,
+                    fill: 'd_y',
                     sort: { y: "x", reverse: true }
                 }),
+                // Plot.barX(src.list, 
+                //     Plot.groupY({x: 'count'}, {
+                //     y: "key",
+                //     fill: 'Response',
+                //     sort: { y: "x", reverse: true }
+                // })),
                 Plot.text(src.list, {
                     text: 'sum',
                     x: 'sum',
@@ -417,6 +387,33 @@
                 }),
                 PlotGridX(),
                 Plot.text([`Total spent by ${src.colOrigin}`], { frameAnchor: 'top', dy: -20 }),
+            )
+
+            return Plot.plot(obj);
+        }
+
+        function createTypePlot2(dataSource, fill, maxRange) {
+            const src = dataSource;
+
+            // plot
+            const obj = {marks: []};
+            obj.color = {
+                legend: true,
+                scheme: 'Accent'
+            };
+
+            obj.marks.push(
+                Plot.barX(src, 
+                    Plot.groupY({
+                        x: 'sum'
+                    }, {
+                        x: 'v',
+                        y: 'type0',
+                        fill: 'd_y',
+                        tip: true,
+                    }
+                )),
+                Plot.ruleX([0])
             )
 
             return Plot.plot(obj);
