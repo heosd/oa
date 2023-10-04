@@ -135,7 +135,7 @@ class DataBudget {
         return {
             d_ymd: ymd,
             d_m: m,
-            d_y: y,
+            d_y: y.toString(),
             d_ym: ym,
             d_md: md
         }

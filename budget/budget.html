@@ -22,7 +22,7 @@
             margin: 0 auto;
             border: 1px solid black;
             display: block;
-            padding: 1.5cm 1.5cm 2cm 1.5cm;
+            padding: 0.5cm 0.5cm 0.5cm 0.5cm;
         }
 
         .color1 {
@@ -167,7 +167,8 @@
         function getDefaultPlot() {
             const obj = {
                 style: { fontSize: 12 },
-                marginLeft: 150,
+                color: { type: 'categorical', legend: true },
+                marginLeft: 100,
                 marginBottom: 45,
                 marginTop: 35,
                 marginRight: 20,
@@ -262,33 +263,35 @@
 
 
             const plotTotal = document.getElementById('area-plot-total');
+
             // -- Plot date
             if (budget.optDate) {
-                const pplot = document.getElementById('sum-date-plot');
+                // const pplot = document.getElementById('sum-date-plot');
                 const plot = createDatePlot(budget, range);
                 appendChildPage(plotTotal, plot);
-
-                // pplot.appendChild(plot);
             }
 
-            // -- Plot Types
+            // -- Plot Types All
             if (budget.ssType && 0 < budget.ssType.length) {
-                const pplot = document.getElementById('sum-type-plot');
-                pplot.innerHTML = '';
+                // const pplot = document.getElementById('sum-type-plot');
+                // pplot.innerHTML = '';
 
                 budget.ssType.forEach((d, i) => {
-                    const plot = createTypePlot(d, d3.schemeAccent[i], range);
+                    const plot = createTypePlot(budget.cloned, d, range);
                     appendChildPage(plotTotal, plot);
-                    // pplot.appendChild(svg);
                 });
-
-            } else {
-                // no types found
-                document.getElementById('sum-types').textContent = '0';
             }
 
-            const svg = createTypePlot2(budget.cloned);
-            appendChildPage(plotTotal, svg);
+            // -- Plot types latest year only
+
+            if (budget.ssType && 0 < budget.ssType.length) {
+                const dataLatest = budget.cloned.filter(d => d.d_y === budget.ssDate.list.at(-1).y);
+                budget.ssType.forEach((d, i) => {
+                    const plot = createTypePlot(dataLatest, d, range);
+                    appendChildPage(plotTotal, plot);
+                });
+            }
+
 
         }
 
@@ -326,9 +329,9 @@
             // plot
             const obj = getDefaultPlot();
             obj.x = { label: null, grid: true, tickFormat: formatKRW, domain: [0, maxRange] };
-            obj.y = { label: 'Year', tickFormat: d => d.toString(), type: 'band' };
+            obj.y = { label: 'Year', type: 'band' };
             obj.marks.push(
-                Plot.barX(src, { x: 'sum', y: 'y', fill: 'steelblue' }),
+                Plot.barX(src, { x: 'sum', y: 'y', fill: 'y' }),
                 Plot.ruleX([0]),
                 Plot.text(src, {
                     text: 'sum',
@@ -344,204 +347,53 @@
             return Plot.plot(obj);
         }
 
-        function createTypePlot(dataSource, fill, maxRange) {
+        function createTypePlot(dataSource, type, maxRange) {
+            const col = type.col;
             const src = dataSource;
 
-            // plot
             const obj = getDefaultPlot();
-            obj.x = { grid: true, label: null, domain: [0, maxRange], tickFormat: formatKRW };
-            obj.y = {
-                label: src.colOrigin,
-                tickFormat: d => {
-                    if (10 <= d.length) {
-                        return d.substring(0, 10) + '..';
-                    } else {
-                        return d;
-                    }
-                },
-            };
-            obj.color = {
-                scheme: 'RdBu'
-            };
-
-            obj.marks.push(
-                Plot.barX(src.list, {
-                    x: "sum",
-                    y: "key",
-                    fill: 'd_y',
-                    sort: { y: "x", reverse: true }
-                }),
-                // Plot.barX(src.list, 
-                //     Plot.groupY({x: 'count'}, {
-                //     y: "key",
-                //     fill: 'Response',
-                //     sort: { y: "x", reverse: true }
-                // })),
-                Plot.text(src.list, {
-                    text: 'sum',
-                    x: 'sum',
-                    y: 'key',
-                    textAnchor: 'start',
-                    dx: 5,
-                    fontSize: 12,
-                }),
-                PlotGridX(),
-                Plot.text([`Total spent by ${src.colOrigin}`], { frameAnchor: 'top', dy: -20 }),
-            )
-
-            return Plot.plot(obj);
-        }
-
-        function createTypePlot2(dataSource, fill, maxRange) {
-            const src = dataSource;
 
             // plot
-            const obj = {marks: []};
-            obj.color = {
-                legend: true,
-                scheme: 'Accent'
+            obj.x = {
+                grid: true, label: null, domain: [0, maxRange], tickFormat: formatKRW,
+                type: 'linear'
             };
 
+            obj.y = {
+                label: type.colOrigin
+            }
+
             obj.marks.push(
-                Plot.barX(src, 
+                Plot.barX(src,
                     Plot.groupY({
                         x: 'sum'
                     }, {
                         x: 'v',
-                        y: 'type0',
+                        y: col,
                         fill: 'd_y',
                         tip: true,
+                        sort: { y: 'x', reverse: true }
                     }
-                )),
-                Plot.ruleX([0])
+                    )),
+                Plot.text(src,
+                    Plot.groupY({
+                        x: 'sum',
+                        text: d => d.reduce((a, b) => a + b.v, 0),
+                    }, {
+                        x: 'v',
+                        y: col,
+                        textAnchor: 'start',
+                        dx: 5,
+
+                        sort: { y: 'x', reverse: true }
+                    }
+                    )),
+                PlotGridX(),
             )
 
             return Plot.plot(obj);
         }
 
-        function createPlottest(src, opt) {
-            const data = src;
-
-            const obj = {
-                marginLeft: 60,
-                color: { legend: true },
-                x: {
-                    grid: true,
-                    label: 'Value',
-                    tickFormat: formatKRW,
-                },
-                y: { label: null },
-                marks: [
-                    Plot.rectY(data, {
-                        x: 'x',
-                        y: 'y',
-                        stroke: 'y',
-                        strokeWidth: 3,
-                        sort: 'x',
-                    }),
-                    // dot at end
-                    Plot.dot(data, {
-                        x: 'x',
-                        y: 'y',
-                        fill: 'y',
-                        r: 3
-                    }),
-                    Plot.text(data, {
-                        x: 'x',
-                        y: 'y',
-                        textAnchor: 'start',
-                        dx: 5,
-                        text: 'x',
-                    }),
-                    Plot.ruleX([0]),
-                ]
-            };
-
-            // options
-            if (0 < opt.maxRange) {
-                obj.x.domain = [0, opt.maxRange];
-            }
-
-            if (opt.title) {
-                const text = Plot.text([opt.title], { fontSize: 20, frameAnchor: 'top', dy: -20 });
-                obj.marks.push(text);
-            }
-
-            return obj;
-        }
-
-        function createPlotY(src, opt) {
-            const data = src;
-
-            const yi = data.map(d => d.y);
-            const sy = d3.scaleOrdinal(data.map(d => d.y), Array.from(Array(data.length - 1).keys()));
-            const syinvert = d3.scaleOrdinal(sy.range(), sy.domain());
-
-            const obj = {
-                marginLeft: 60,
-                color: { legend: true },
-                x: {
-                    grid: true,
-                    label: 'Value',
-                    tickFormat: formatKRW,
-                },
-                y: { label: null, tickFormat: d => syinvert(d), ticks: sy.range() },
-                marks: [
-                    Plot.ruleY(data, {
-                        x: 'x',
-                        y: d => sy(d.y),
-                        stroke: 'y',
-                        strokeWidth: 3,
-                    }),
-                    // dot at end
-                    // Plot.dot(data, {
-                    //     x: 'x',
-                    //     y: 'y',
-                    //     fill: 'y',
-                    //     r: 3
-                    // }),
-                    // Plot.text(data, {
-                    //     x: 'x',
-                    //     y: 'y',
-                    //     textAnchor: 'start',
-                    //     dx: 5,
-                    //     text: 'x',
-                    // }),
-                    Plot.ruleX([0]),
-                ]
-            };
-
-            // options
-            if (0 < opt.maxRange) {
-                obj.x.domain = [0, opt.maxRange];
-            }
-
-            if (opt.title) {
-                const text = Plot.text([opt.title], { fontSize: 20, frameAnchor: 'top', dy: -20 });
-                obj.marks.push(text);
-            }
-
-            return obj;
-
-        }
-
-
-        function rollupxy(src, g) {
-            const typeV = typeof v;
-            const typeG = typeof g;
-            const rr = d3.rollups(src,
-                (list) => d3.sum(list, d => d.v)
-                , (d) => {
-                    if ('string' === typeG) {
-                        return d[g];
-                    } else if ('function' === typeG) {
-                        return g(d);
-                    }
-                });
-
-            const xy = rr.map(d => { return { x: d[1], y: d[0] } });
-            return xy;
-        }
 
         function roundUp(v, percent = 1) {
             let base = 10;
@@ -574,7 +426,14 @@
             const rect = lastPage.getBoundingClientRect();
 
             const lastBottom = getHeightChild(lastPage);
-            const newHeight = ~~child.getAttribute('height');
+            let newHeight = ~~child.getAttribute('height');
+
+            if ('FIGURE' === child.tagName) {
+                // figure height is 33
+                const h = child.childNodes[1].getAttribute('height');
+                newHeight = 33 + parseInt(h);
+            }
+
             // condition may require padding !
             if (rect.height < (lastBottom + newHeight)) {
                 const newSection = document.createElement('section');
