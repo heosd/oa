@@ -75,7 +75,9 @@
 
 <body>
 
-    <div id="area-test"></div>
+    <div id="area-test">
+        <svg id="svg" width="500"></svg>
+    </div>
     <div id="area-plot-total"></div>
     <div id="area-plot-year"></div>
     <section id="testarea" class="page">
@@ -117,9 +119,6 @@
     </section>
 
 
-
-
-
     <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
     <script src="https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6"></script>
 
@@ -155,6 +154,77 @@
             refreshSummary(budget);
         }, 1);
 
+        // get width of node
+        function getWidthNode(d, i, g) {
+            const node = g[i];
+            const bbox = node.getBBox();
+            const w = Math.ceil(bbox.width);
+            return w;
+        }
+
+        // get width of node plus margin, used in d3 callback
+        const fnWidth = (m) => {
+            const margin = m;
+            let x = 0;
+
+            const fn = (d, i, g) => {
+                const w = getWidthNode(d, i, g);
+
+                if (0 === i) {
+                    x = w + (margin * 2);
+                    return margin;
+                } else {
+                    const retX = x;
+                    x = x + w + margin;
+                    return retX;
+                }
+            }
+
+            return fn;
+        }
+
+        function createRectLegend(selector, list, scheme = d3.schemeCategory10, size = 30) {
+            const SVG = d3.select(selector);
+
+            var color = d3.scaleOrdinal()
+                .domain(list)
+                .range(scheme);
+
+            const g = SVG.selectAll('g')
+                .data(list)
+                .join('g')
+                ;
+
+            g.insert('rect')
+                .attr('width', size)
+                .attr('height', size)
+                .attr('fill', color);
+
+            g.insert('text')
+                .text(d => d)
+                .attr('x', size + 4)
+                .attr('text-anchior', 'left')
+                .attr('alignment-baseline', 'hanging')
+                .attr('fill', color);
+
+            const ff = fnWidth(size);
+
+            SVG.selectAll('g').attr('transform', (d, i, g) => {
+                const x = ff(d, i, g);
+                return `translate(${x} ${size})`
+            });
+
+            return SVG;
+        }
+
+        function test() {
+            const legend = createRectLegend(
+                '#svg',
+                ['2019', '2020', '2021', '2022'], d3.schemeCategory10, 15);
+            legend.selectAll('text')
+                .attr('font-size', 10);
+        }
+
         function createE(tag, text) {
             const e = document.createElement(tag);
             if (undefined !== typeof text) {
@@ -167,7 +237,7 @@
         function getDefaultPlot() {
             const obj = {
                 style: { fontSize: 12 },
-                color: { type: 'categorical', legend: true },
+                color: { type: 'categorical', legend: false },
                 marginLeft: 100,
                 marginBottom: 45,
                 marginTop: 35,
@@ -442,7 +512,22 @@
                 e.appendChild(newSection);
             } else {
                 lastPage.appendChild(child);
+
+                // test blob
+                const blob = createBlob(child);
+                const anchor = document.createElement('a');
+                anchor.href = URL.createObjectURL(blob);
+                anchor.download = 'export.svg';
+                anchor.textContent = 'down';
+                lastPage.appendChild(anchor)
             }
+        }
+
+        function createBlob(e) {
+            const data = new XMLSerializer().serializeToString(e);
+            const blob = new Blob([data], { type: "image/svg+xml;charset=utf-8" });
+
+            return blob;
         }
 
         function getHeightChild(e) {
