@@ -76,7 +76,6 @@
 <body>
 
     <div id="area-test">
-        <svg id="svg" width="500"></svg>
     </div>
     <div id="area-plot-total"></div>
     <div id="area-plot-year"></div>
@@ -124,6 +123,7 @@
 
     <script src="../js/Generator.js"></script>
     <script src="../js/DataBudget.js"></script>
+    <script src="../js/Legend.js"></script>
 
     <script>
         setTimeout(async () => {
@@ -152,78 +152,9 @@
             console.log(budget.ssYear);
 
             refreshSummary(budget);
+
+            updateAllRectLegend();
         }, 1);
-
-        // get width of node
-        function getWidthNode(d, i, g) {
-            const node = g[i];
-            const bbox = node.getBBox();
-            const w = Math.ceil(bbox.width);
-            return w;
-        }
-
-        // get width of node plus margin, used in d3 callback
-        const fnWidth = (m) => {
-            const margin = m;
-            let x = 0;
-
-            const fn = (d, i, g) => {
-                const w = getWidthNode(d, i, g);
-
-                if (0 === i) {
-                    x = w + (margin * 2);
-                    return margin;
-                } else {
-                    const retX = x;
-                    x = x + w + margin;
-                    return retX;
-                }
-            }
-
-            return fn;
-        }
-
-        function createRectLegend(selector, list, scheme = d3.schemeCategory10, size = 30) {
-            const SVG = d3.select(selector);
-
-            var color = d3.scaleOrdinal()
-                .domain(list)
-                .range(scheme);
-
-            const g = SVG.selectAll('g')
-                .data(list)
-                .join('g')
-                ;
-
-            g.insert('rect')
-                .attr('width', size)
-                .attr('height', size)
-                .attr('fill', color);
-
-            g.insert('text')
-                .text(d => d)
-                .attr('x', size + 4)
-                .attr('text-anchior', 'left')
-                .attr('alignment-baseline', 'hanging')
-                .attr('fill', color);
-
-            const ff = fnWidth(size);
-
-            SVG.selectAll('g').attr('transform', (d, i, g) => {
-                const x = ff(d, i, g);
-                return `translate(${x} ${size})`
-            });
-
-            return SVG;
-        }
-
-        function test() {
-            const legend = createRectLegend(
-                '#svg',
-                ['2019', '2020', '2021', '2022'], d3.schemeCategory10, 15);
-            legend.selectAll('text')
-                .attr('font-size', 10);
-        }
 
         function createE(tag, text) {
             const e = document.createElement(tag);
@@ -331,21 +262,16 @@
             const max = Math.max(...listMax);
             const range = roundUp(max, 1.3);
 
-
             const plotTotal = document.getElementById('area-plot-total');
 
             // -- Plot date
             if (budget.optDate) {
-                // const pplot = document.getElementById('sum-date-plot');
                 const plot = createDatePlot(budget, range);
                 appendChildPage(plotTotal, plot);
             }
 
             // -- Plot Types All
             if (budget.ssType && 0 < budget.ssType.length) {
-                // const pplot = document.getElementById('sum-type-plot');
-                // pplot.innerHTML = '';
-
                 budget.ssType.forEach((d, i) => {
                     const plot = createTypePlot(budget.cloned, d, range);
                     appendChildPage(plotTotal, plot);
@@ -353,7 +279,6 @@
             }
 
             // -- Plot types latest year only
-
             if (budget.ssType && 0 < budget.ssType.length) {
                 const dataLatest = budget.cloned.filter(d => d.d_y === budget.ssDate.list.at(-1).y);
                 budget.ssType.forEach((d, i) => {
@@ -393,6 +318,19 @@
             return v + unit[1];
         }
 
+        function createSVG(w = 640, h) {
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            if (w) {
+                svg.setAttribute('width', w);
+            }
+
+            if (h) {
+                svg.setAttribute('height', h);
+            }
+
+            return svg;
+        }
+
         function createDatePlot(budget, maxRange) {
             const src = budget.ssDate.list;
 
@@ -414,12 +352,25 @@
                 PlotGridX(),
             );
 
-            return Plot.plot(obj);
+            const plot = Plot.plot(obj);
+
+            const svg = createSVG();
+            const legend = createRectLegend(src.map(d => d.y));
+            svg.appendChild(legend);
+
+            plot.setAttribute('y', 30);
+            svg.appendChild(plot);
+            svg.setAttribute('height', ~~plot.getAttribute('height') + ~~plot.getAttribute('y'));
+
+            return svg;
         }
 
         function createTypePlot(dataSource, type, maxRange) {
             const col = type.col;
             const src = dataSource;
+
+            const idx = d3.group(src, d => d.d_y);
+            const listLegend = Array.from(idx.keys());
 
             const obj = getDefaultPlot();
 
@@ -460,6 +411,18 @@
                     )),
                 PlotGridX(),
             )
+
+            const plot = Plot.plot(obj);
+
+            const svg = createSVG();
+            const legend = createRectLegend(listLegend);
+            svg.appendChild(legend);
+
+            plot.setAttribute('y', 30);
+            svg.appendChild(plot);
+            svg.setAttribute('height', ~~plot.getAttribute('height') + ~~plot.getAttribute('y'));
+
+            return svg;
 
             return Plot.plot(obj);
         }
@@ -508,19 +471,20 @@
             if (rect.height < (lastBottom + newHeight)) {
                 const newSection = document.createElement('section');
                 newSection.classList.add('page');
-                newSection.appendChild(child);
+                lastPage = newSection;
                 e.appendChild(newSection);
-            } else {
-                lastPage.appendChild(child);
-
-                // test blob
-                const blob = createBlob(child);
-                const anchor = document.createElement('a');
-                anchor.href = URL.createObjectURL(blob);
-                anchor.download = 'export.svg';
-                anchor.textContent = 'down';
-                lastPage.appendChild(anchor)
             }
+            lastPage.appendChild(child);
+
+            updateAllRectLegend();
+
+            // test blob
+            const blob = createBlob(child);
+            const anchor = document.createElement('a');
+            anchor.href = URL.createObjectURL(blob);
+            anchor.download = 'export.svg';
+            anchor.textContent = 'down';
+            lastPage.appendChild(anchor)
         }
 
         function createBlob(e) {
