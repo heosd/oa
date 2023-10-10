@@ -101,6 +101,9 @@
 
         <h2>Types</h2>
         <div id="selectTypes" class="select-checkbox"></div>
+
+        <h2>Color scheme</h2>
+        <div id="selectColors"></div>
     </div>
     <div id="area-plot-total"></div>
     <div id="area-plot-year"></div>
@@ -196,9 +199,11 @@
         }
 
         function getDefaultPlot() {
+            const budget = getBudget();
+
             const obj = {
                 style: { fontSize: 12 },
-                color: { type: 'categorical', legend: false },
+                color: { type: 'categorical', legend: false, scheme: budget.selectedColorSchemeName },
                 marginLeft: 100,
                 marginBottom: 45,
                 marginTop: 35,
@@ -344,6 +349,69 @@
 
             // -- Group
             onChangeG1();
+
+            // -- Colors
+            refreshUserSelectColorScheme();
+        }
+
+        function refreshUserSelectColorScheme() {
+            const budget = getBudget();
+
+            const colors = document.getElementById('selectColors');
+            const size = 20;
+
+            const listColors = [
+                [d3.schemeCategory10, 'category10' ],
+                [d3.schemeAccent, 'accent' ],
+                [d3.schemeDark2, 'dark2' ],
+                [d3.schemePaired, 'paired' ],
+                [d3.schemePastel1, 'pastel1' ],
+                [d3.schemePastel2, 'pastel2' ],
+                [d3.schemeSet1, 'set1' ],
+                [d3.schemeSet2, 'set2' ],
+                [d3.schemeSet3, 'set3' ],
+                [d3.schemeTableau10, 'tableau10' ],
+            ];
+
+            listColors.forEach((d, i) => {
+                const div = document.createElement('label');
+                div.style.display = 'block';
+                const id = `selectColorScheme_${i}`;
+                div.setAttribute('id', id);
+
+                const input = document.createElement('input');
+                input.setAttribute('type', 'radio');
+                input.setAttribute('name', 'selectColorScheme');
+                input.addEventListener('change', (e) => {
+                    budget.selectedColorScheme = d[0];
+                    budget.selectedColorSchemeName = d[1];
+                    onChangeColor();
+                });
+                div.appendChild(input);
+
+                colors.appendChild(div);
+                appendColorScheme('#' + id, d[0], size);
+            });
+
+            // -- default the first one
+            colors.querySelector('input').setAttribute('checked', true);
+            budget.selectedColorScheme = listColors[0][0];
+            budget.selectedColorSchemeName = listColors[0][1];
+        }
+
+        function appendColorScheme(selector, listColors, size) {
+            d3.select(selector)
+                .insert('svg')
+                .attr('width', 300)
+                .attr('height', size)
+                .selectAll('rect')
+                .data(listColors)
+                .join('rect')
+                .attr('x', (d, i) => i * size)
+                .attr('width', size)
+                .attr('height', size)
+                .attr('fill', d => d)
+
         }
 
         function onChangeYear(budget) {
@@ -375,7 +443,7 @@
 
             const fn1y = (d) => d.d_y;
             const fn6m = (d) => {
-                const half = 6 >= d.d_m ? 'First' : 'Second';
+                const half = 6 >= d.d_m ? '전반기' : '하반기';
                 return `${d.d_y} ${half}`;
             };
             const fn3m = (d) => {
@@ -405,6 +473,13 @@
             refreshSummary(budget);
         }
 
+        function onChangeColor() {
+            // already processed
+            const budget = getBudget();
+            filterBudgetBySelected(budget);
+            refreshSummary(budget);
+        }
+
         function filterBudgetBySelected(budget) {
             // budget.dataFiltered
 
@@ -424,15 +499,6 @@
 
             return budget.dataFiltered;
         }
-
-        function refreshLatestYear(budget, range) {
-            // console.log(budget, range);
-            // const latestYear = parseInt(budget.ssDate.list.at(-1).y);
-            // const list = budget.dataCloned.filter(d => d.y === latestYear);
-            // console.log(list);
-            // console.log(late/stYear);
-        }
-
 
         function formatKRW(krw) {
             if (0 === krw) {
@@ -467,9 +533,10 @@
         }
 
         function createDatePlot(dataSource, maxRange) {
+            const budget = getBudget();
             const src = dataSource;
 
-            const idx = d3.group(src, d => d.d_y);
+            const idx = d3.group(src, d => d.g1);
             const listLegend = Array.from(idx.keys()).sort();
 
             // plot
@@ -503,18 +570,19 @@
             );
 
             const plot = Plot.plot(obj);
-            plot.appendChild(createRectLegend(listLegend));
+            plot.appendChild(createRectLegend(listLegend, {color: budget.selectedColorScheme}));
             plot.addEventListener('dblclick', e => downloadSVG(e.target, 'years.svg'));
 
             return plot;
         }
 
         function createTypePlot(dataSource, type, maxRange) {
+            const budget = getBudget();
             const col = type.col;
             const src = dataSource;
 
-            const idx = d3.group(src, d => d.d_y);
-            const listLegend = Array.from(idx.keys());
+            const idx = d3.group(src, d => d.g1);
+            const listLegend = Array.from(idx.keys()).sort();
 
             const obj = getDefaultPlot();
 
@@ -558,7 +626,7 @@
 
             const plot = Plot.plot(obj);
 
-            plot.appendChild(createRectLegend(listLegend));
+            plot.appendChild(createRectLegend(listLegend, {color: budget.selectedColorScheme}));
             plot.addEventListener('dblclick', e => downloadSVG(e.target, `${type.colOrigin}.svg`));
             return plot;
         }
