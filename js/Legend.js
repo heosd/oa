@@ -28,13 +28,16 @@ const fnWidth = (m) => {
 }
 
 function createRectLegend(list, opt) {
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    // const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'g');
 
     const scheme = opt?.color || d3.schemeCategory10;
     const size = opt?.size || 15;
 
     svg.classList.add('_legend_adjust');
+    svg.setAttributeNS(null, 'aria-label', 'custom-legend');
     svg.setAttributeNS(null, 'data-size', size);
+    svg.setAttributeNS(null, 'text-anchor', 'start');
 
     var color = d3.scaleOrdinal()
         .domain(list)
@@ -54,8 +57,8 @@ function createRectLegend(list, opt) {
     g.insert('text')
         .text(d => d)
         .attr('x', size + 4)
+        .attr('y', 12) // font size
         .attr('text-anchior', 'left')
-        .attr('alignment-baseline', 'hanging')
         .attr('fill', color);
 
     return svg;

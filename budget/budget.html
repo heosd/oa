@@ -70,12 +70,37 @@
         caption {
             text-align: left;
         }
+
+        /* Check box area */
+        .select-checkbox {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            column-gap: 5px;
+        }
     </style>
 </head>
 
 <body>
 
     <div id="area-test">
+    </div>
+
+    <div id="area-select" class="page">
+        <h2>Select years</h2>
+        <div id="selectYears" class="select-checkbox"></div>
+
+        <h2>Group</h2>
+        <div>
+            <select id="selectG1" onchange="onChangeG1(this.value)">
+                <option value="1y" selected="selected">Year</option>
+                <option value="6m">6 Month</option>
+                <option value="3m">3 Month</option>
+                <option value="1m">1 Month</option>
+            </select>
+        </div>
+
+        <h2>Types</h2>
+        <div id="selectTypes" class="select-checkbox"></div>
     </div>
     <div id="area-plot-total"></div>
     <div id="area-plot-year"></div>
@@ -114,9 +139,7 @@
                 <tbody id="sum-area-opt"></tbody>
             </table>
         </div>
-
     </section>
-
 
     <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
     <script src="https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6"></script>
@@ -144,14 +167,21 @@
             budget.execType();
             budget.execYears();
 
-            console.log(budget.opt);
-            console.log(budget.cloned);
-            console.log(budget.ssDate);
-            console.log(budget.ssPCV);
-            console.log(budget.ssType);
-            console.log(budget.ssYear);
+            // console.log(budget.opt);
+            // console.log(budget.cloned);
+            // console.log(budget.ssDate);
+            // console.log(budget.ssPCV);
+            // console.log(budget.ssType);
+            // console.log(budget.ssYear);
 
-            refreshSummary(budget);
+            console.log(budget);
+
+            // global access
+            window.getBudget = () => budget;
+
+            refreshUserSelect(budget);
+            filterBudgetBySelected(budget); // sets budget.dataFiltered
+            // refreshSummary(budget);
 
             updateAllRectLegend();
         }, 1);
@@ -188,63 +218,63 @@
         }
 
         function refreshSummary(budget) {
-            // -- data source
-            document.getElementById('sum-count-datasource').textContent = budget.dataSource.length;
+            // // -- data source
+            // document.getElementById('sum-count-datasource').textContent = budget.dataSource.length;
 
-            // cols
-            const trHeader = document.getElementById('sum-tr-rowcol');
-            const first = budget.dataSource[0];
-            const keys = Object.keys(first);
-            keys.forEach(k => trHeader.appendChild(createE('th', k)));
+            // // cols
+            // const trHeader = document.getElementById('sum-tr-rowcol');
+            // const first = budget.dataSource[0];
+            // const keys = Object.keys(first);
+            // keys.forEach(k => trHeader.appendChild(createE('th', k)));
 
-            // 5 items or less
-            const maxLen = Math.min(5, budget.dataSource.length);
-            document.getElementById('sum-count-first').textContent = maxLen;
-            const areaDataSource = document.getElementById('sum-area-datasource');
-            for (let i = 0; i < maxLen; i++) {
-                const item = budget.dataSource[i];
-                const tr = document.createElement('tr');
-                keys.forEach(k => {
-                    const str = item[k].toString();
-                    let short = item[k].toString().substring(0, 8);
-                    if (8 < str.length) {
-                        short = short + '..';
-                    }
-                    const th = createE('th', short);
-                    th.setAttribute('title', str);
-                    tr.appendChild(th);
-                });
-                areaDataSource.appendChild(tr);
-            }
+            // // 5 items or less
+            // const maxLen = Math.min(5, budget.dataSource.length);
+            // document.getElementById('sum-count-first').textContent = maxLen;
+            // const areaDataSource = document.getElementById('sum-area-datasource');
+            // for (let i = 0; i < maxLen; i++) {
+            //     const item = budget.dataSource[i];
+            //     const tr = document.createElement('tr');
+            //     keys.forEach(k => {
+            //         const str = item[k].toString();
+            //         let short = item[k].toString().substring(0, 8);
+            //         if (8 < str.length) {
+            //             short = short + '..';
+            //         }
+            //         const th = createE('th', short);
+            //         th.setAttribute('title', str);
+            //         tr.appendChild(th);
+            //     });
+            //     areaDataSource.appendChild(tr);
+            // }
 
-            // -- option
-            const opt = budget.opt;
-            const areaOpt = document.getElementById('sum-area-opt');
+            // // -- option
+            // const opt = budget.opt;
+            // const areaOpt = document.getElementById('sum-area-opt');
 
-            // preprocess
-            const dateGroups = budget.ssDate.list.map(d => `${d.y} [${d.count}]`).join(', ');
+            // // preprocess
+            // const dateGroups = budget.ssDate.list.map(d => `${d.y} [${d.count}]`).join(', ');
 
-            const listOptions =
-                [
-                    ['date', opt.date, budget.ssDate.valid.toString(), budget.ssDate.invalid.toString(), dateGroups],
-                    ['price', opt.price, budget.ssPCV.pvalid, budget.ssPCV.pinvalid, budget.ssPCV.prange.join(' ~ ')],
-                    ['count', opt.count, budget.ssPCV.cvalid, budget.ssPCV.cinvalid, budget.ssPCV.crange.join(' ~ ')],
-                ];
+            // const listOptions =
+            //     [
+            //         ['date', opt.date, budget.ssDate.valid.toString(), budget.ssDate.invalid.toString(), dateGroups],
+            //         ['price', opt.price, budget.ssPCV.pvalid, budget.ssPCV.pinvalid, budget.ssPCV.prange.join(' ~ ')],
+            //         ['count', opt.count, budget.ssPCV.cvalid, budget.ssPCV.cinvalid, budget.ssPCV.crange.join(' ~ ')],
+            //     ];
 
-            budget.ssType.forEach(d => {
-                const typeGroups = d.list.map(typeItem => `${typeItem.key} [${typeItem.count}]`).join(', ');
-                const item = ['type', d.colOrigin, d.valid, d.invalid, typeGroups];
-                listOptions.push(item);
-            });
+            // budget.ssType.forEach(d => {
+            //     const typeGroups = d.list.map(typeItem => `${typeItem.key} [${typeItem.count}]`).join(', ');
+            //     const item = ['type', d.colOrigin, d.valid, d.invalid, typeGroups];
+            //     listOptions.push(item);
+            // });
 
-            listOptions.forEach(line => {
-                const trOpt = document.createElement('tr');
-                line.forEach(d => {
-                    const td = createE('td', d);
-                    trOpt.appendChild(td);
-                });
-                areaOpt.appendChild(trOpt);
-            });
+            // listOptions.forEach(line => {
+            //     const trOpt = document.createElement('tr');
+            //     line.forEach(d => {
+            //         const td = createE('td', d);
+            //         trOpt.appendChild(td);
+            //     });
+            //     areaOpt.appendChild(trOpt);
+            // });
 
             // max range
             const listMax = [];
@@ -263,31 +293,136 @@
             const range = roundUp(max, 1.3);
 
             const plotTotal = document.getElementById('area-plot-total');
+            plotTotal.innerHTML = '';
 
             // -- Plot date
             if (budget.optDate) {
-                const plot = createDatePlot(budget, range);
+                const plot = createDatePlot(budget.dataFiltered, range);
                 appendChildPage(plotTotal, plot);
             }
 
             // -- Plot Types All
             if (budget.ssType && 0 < budget.ssType.length) {
                 budget.ssType.forEach((d, i) => {
-                    const plot = createTypePlot(budget.cloned, d, range);
+                    const plot = createTypePlot(budget.dataFiltered, d, range);
                     appendChildPage(plotTotal, plot);
                 });
             }
+        }
 
-            // -- Plot types latest year only
-            if (budget.ssType && 0 < budget.ssType.length) {
-                const dataLatest = budget.cloned.filter(d => d.d_y === budget.ssDate.list.at(-1).y);
-                budget.ssType.forEach((d, i) => {
-                    const plot = createTypePlot(dataLatest, d, range);
-                    appendChildPage(plotTotal, plot);
-                });
+        function createLabelCheck(text, value) {
+            const label = document.createElement('label');
+            const input = document.createElement('input');
+            input.setAttribute('type', 'checkbox');
+            input.setAttribute('value', value);
+            label.appendChild(input);
+            label.appendChild(document.createTextNode(text));
+
+            return [label, input];
+        }
+
+        function refreshUserSelect(budget) {
+            // -- Years
+            const years = document.getElementById('selectYears');
+            years.innerHTML = '';
+
+            budget.ssDate.list.forEach(d => {
+                const [l, i] = createLabelCheck(d.y, d.y);
+                i.addEventListener('change', () => onChangeYear(budget));
+                years.appendChild(l);
+            });
+
+            // -- Types
+            const types = document.getElementById('selectTypes');
+            types.innerHTML = '';
+
+            budget.ssType.forEach(d => {
+                const [l, i] = createLabelCheck(d.colOrigin, d.col);
+                i.addEventListener('change', () => onChangeType(budget));
+                types.appendChild(l);
+            });
+
+            // -- Group
+            onChangeG1();
+        }
+
+        function onChangeYear(budget) {
+            console.log('Year select changed');
+            const years = document.getElementById('selectYears');
+            const checked = Array.from(years.querySelectorAll(':checked')).map(d => d.value);
+            console.log(checked);
+
+            budget.selectedYears = checked;
+            filterBudgetBySelected(budget);
+            refreshSummary(budget);
+        }
+
+        function onChangeType(budget) {
+            console.log('Type select changed');
+            const types = document.getElementById('selectTypes');
+            const checked = Array.from(types.querySelectorAll(':checked')).map(d => d.value);
+            console.log(checked);
+
+            budget.selectedTypes = checked;
+            filterBudgetBySelected(budget);
+            refreshSummary(budget);
+        }
+
+        function onChangeG1() {
+            const budget = getBudget();
+
+            const v = document.getElementById('selectG1').value;
+
+            const fn1y = (d) => d.d_y;
+            const fn6m = (d) => {
+                const half = 6 >= d.d_m ? 'First' : 'Second';
+                return `${d.d_y} ${half}`;
+            };
+            const fn3m = (d) => {
+                const f = [
+                    [3, '1/4'],
+                    [6, '2/4'],
+                    [9, '3/4'],
+                    [12, '4/4'],
+                ].find(item => d.d_m <= item[0]);
+
+                return `${d.d_y} ${f[1]}`;
+            };
+
+            const fn1m = (d) => d.d_ym;
+
+            const f = [
+                ['1y', fn1y],
+                ['6m', fn6m],
+                ['3m', fn3m],
+                ['1m', fn1m],
+            ].find(item => v === item[0]);
+
+            budget.selectedG1 = v;
+            budget.selectedG1fn = f[1];
+
+            filterBudgetBySelected(budget);
+            refreshSummary(budget);
+        }
+
+        function filterBudgetBySelected(budget) {
+            // budget.dataFiltered
+
+            budget.dataFiltered = budget.cloned.filter(d => {
+                if (budget.selectedYears && 0 < budget.selectedYears.length) {
+                    if (-1 === budget.selectedYears.indexOf(d.d_y)) {
+                        return false;
+                    }
+                }
+
+                return true;
+            });
+
+            if(budget.selectedG1fn) {
+                budget.dataFiltered.forEach(d => d.g1 = budget.selectedG1fn(d));
             }
 
-
+            return budget.dataFiltered;
         }
 
         function refreshLatestYear(budget, range) {
@@ -331,38 +466,47 @@
             return svg;
         }
 
-        function createDatePlot(budget, maxRange) {
-            const src = budget.ssDate.list;
+        function createDatePlot(dataSource, maxRange) {
+            const src = dataSource;
+
+            const idx = d3.group(src, d => d.d_y);
+            const listLegend = Array.from(idx.keys()).sort();
 
             // plot
             const obj = getDefaultPlot();
             obj.x = { label: null, grid: true, tickFormat: formatKRW, domain: [0, maxRange] };
             obj.y = { label: 'Year', type: 'band' };
+            obj.marginTop = 60;
             obj.marks.push(
-                Plot.barX(src, { x: 'sum', y: 'y', fill: 'y' }),
-                Plot.ruleX([0]),
-                Plot.text(src, {
-                    text: 'sum',
-                    x: 'sum',
-                    y: 'y',
-                    textAnchor: 'start',
-                    dx: 5,
-                }),
-                Plot.text(['Total spent by years'], { frameAnchor: 'top', dy: -20 }),
+                Plot.barX(src,
+                    Plot.groupY({
+                        x: 'sum'
+                    }, {
+                        x: 'v',
+                        y: 'g1',
+                        fill: 'g1',
+                        tip: true,
+                    }
+                    )),
+                Plot.text(src,
+                    Plot.groupY({
+                        x: 'sum',
+                        text: d => d.reduce((a, b) => a + b.v, 0),
+                    }, {
+                        x: 'v',
+                        y: 'g1',
+                        textAnchor: 'start',
+                        dx: 5,
+                    }
+                    )),
                 PlotGridX(),
             );
 
             const plot = Plot.plot(obj);
+            plot.appendChild(createRectLegend(listLegend));
+            plot.addEventListener('dblclick', e => downloadSVG(e.target, 'years.svg'));
 
-            const svg = createSVG();
-            const legend = createRectLegend(src.map(d => d.y));
-            svg.appendChild(legend);
-
-            plot.setAttribute('y', 30);
-            svg.appendChild(plot);
-            svg.setAttribute('height', ~~plot.getAttribute('height') + ~~plot.getAttribute('y'));
-
-            return svg;
+            return plot;
         }
 
         function createTypePlot(dataSource, type, maxRange) {
@@ -391,7 +535,7 @@
                     }, {
                         x: 'v',
                         y: col,
-                        fill: 'd_y',
+                        fill: 'g1',
                         tip: true,
                         sort: { y: 'x', reverse: true }
                     }
@@ -414,17 +558,9 @@
 
             const plot = Plot.plot(obj);
 
-            const svg = createSVG();
-            const legend = createRectLegend(listLegend);
-            svg.appendChild(legend);
-
-            plot.setAttribute('y', 30);
-            svg.appendChild(plot);
-            svg.setAttribute('height', ~~plot.getAttribute('height') + ~~plot.getAttribute('y'));
-
-            return svg;
-
-            return Plot.plot(obj);
+            plot.appendChild(createRectLegend(listLegend));
+            plot.addEventListener('dblclick', e => downloadSVG(e.target, `${type.colOrigin}.svg`));
+            return plot;
         }
 
 
@@ -478,13 +614,24 @@
 
             updateAllRectLegend();
 
-            // test blob
-            const blob = createBlob(child);
+            // // test blob
+            // const blob = createBlob(child);
+            // const anchor = document.createElement('a');
+            // anchor.href = URL.createObjectURL(blob);
+            // anchor.download = 'export.svg';
+            // anchor.textContent = 'down';
+            // lastPage.appendChild(anchor)
+        }
+
+        function downloadSVG(e, filename) {
+            const blob = createBlob(e);
             const anchor = document.createElement('a');
             anchor.href = URL.createObjectURL(blob);
-            anchor.download = 'export.svg';
-            anchor.textContent = 'down';
-            lastPage.appendChild(anchor)
+            anchor.download = filename;
+            anchor.style.display = 'none';
+            document.body.appendChild(anchor);
+            anchor.click();
+            document.body.removeChild(anchor);
         }
 
         function createBlob(e) {
