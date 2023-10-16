@@ -77,6 +77,12 @@
             grid-template-columns: repeat(8, 1fr);
             column-gap: 5px;
         }
+
+        .select-checkbox-types {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            column-gap: 5px;
+        }
     </style>
 </head>
 
@@ -99,8 +105,9 @@
             </select>
         </div>
 
-        <h2>Types</h2>
-        <div id="selectTypes" class="select-checkbox"></div>
+
+        <!-- <h2>Types</h2> -->
+        <div id="selectTypes"></div>
 
         <h2>Color scheme</h2>
         <div id="selectColors"></div>
@@ -337,21 +344,64 @@
                 years.appendChild(l);
             });
 
-            // -- Types
-            const types = document.getElementById('selectTypes');
-            types.innerHTML = '';
+            // -- Types depends on years
 
-            budget.ssType.forEach(d => {
-                const [l, i] = createLabelCheck(d.colOrigin, d.col);
-                i.addEventListener('change', () => onChangeType(budget));
-                types.appendChild(l);
-            });
+            // -- Types
+            // const types = document.getElementById('selectTypes');
+            // types.innerHTML = '';
+
+            // budget.ssType.forEach(d => {
+            //     const [l, i] = createLabelCheck(d.colOrigin, d.col);
+            //     i.addEventListener('change', () => onChangeType(budget));
+            //     types.appendChild(l);
+            // });
 
             // -- Group
             onChangeG1();
 
             // -- Colors
             refreshUserSelectColorScheme();
+        }
+
+        function refreshUserSelectTypes() {
+            const budget = getBudget();
+
+            // from dataFiltered, modify dataFiltered
+            // set selectedTypes: [{col: 'type0', list: ['o1', 'o2']}]
+
+            const p = document.getElementById('selectTypes');
+            p.innerHTML = '';
+
+            budget.selectedTypes = {};
+
+            budget.ssType.forEach(type => {
+                const keyType = type.col;
+                const group = d3.rollups(budget.dataFiltered, list => list.reduce((a, b) => a + b.v, 0), d => d[keyType]);
+                const desc = group.toSorted((a, b) => b[1] - a[1]);
+
+                // title
+                const h2 = document.createElement('h2');
+                h2.textContent = `Type '${type.colOrigin}'`;
+
+                // div group
+                const div = document.createElement('div');
+                div.classList.add('select-checkbox-types');
+
+                // child checkbox
+                desc.forEach(d => {
+                    // d[0] - title, d[1] - value
+                    const value = d[1].toLocaleString('en-US');
+
+                    const label = createLabelCheck(`${d[0]} (${value})`, d[0]);
+                    div.appendChild(label[0]);
+                    const input = label[1];
+                    input.setAttribute('name', type.col);
+                    input.addEventListener('change', onChangeType);
+                });
+
+                p.appendChild(h2);
+                p.appendChild(div);
+            });
         }
 
         function refreshUserSelectColorScheme() {
@@ -361,16 +411,16 @@
             const size = 20;
 
             const listColors = [
-                [d3.schemeCategory10, 'category10' ],
-                [d3.schemeAccent, 'accent' ],
-                [d3.schemeDark2, 'dark2' ],
-                [d3.schemePaired, 'paired' ],
-                [d3.schemePastel1, 'pastel1' ],
-                [d3.schemePastel2, 'pastel2' ],
-                [d3.schemeSet1, 'set1' ],
-                [d3.schemeSet2, 'set2' ],
-                [d3.schemeSet3, 'set3' ],
-                [d3.schemeTableau10, 'tableau10' ],
+                [d3.schemeCategory10, 'category10'],
+                [d3.schemeAccent, 'accent'],
+                [d3.schemeDark2, 'dark2'],
+                [d3.schemePaired, 'paired'],
+                [d3.schemePastel1, 'pastel1'],
+                [d3.schemePastel2, 'pastel2'],
+                [d3.schemeSet1, 'set1'],
+                [d3.schemeSet2, 'set2'],
+                [d3.schemeSet3, 'set3'],
+                [d3.schemeTableau10, 'tableau10'],
             ];
 
             listColors.forEach((d, i) => {
@@ -422,18 +472,22 @@
 
             budget.selectedYears = checked;
             filterBudgetBySelected(budget);
+            refreshUserSelectTypes();
             refreshSummary(budget);
         }
 
-        function onChangeType(budget) {
-            console.log('Type select changed');
-            const types = document.getElementById('selectTypes');
-            const checked = Array.from(types.querySelectorAll(':checked')).map(d => d.value);
-            console.log(checked);
+        // -- in every checkbox
+        function onChangeType() {
+            const p = this.parentElement.parentElement;
+            const name = this.getAttribute('name');
+            const checked = p.querySelectorAll(`input[name="${name}"]:checked`);
+            const c = Array.from(checked).map(input => input.getAttribute('value'));
 
-            budget.selectedTypes = checked;
-            filterBudgetBySelected(budget);
-            refreshSummary(budget);
+            const budget = getBudget();
+            budget.selectedTypes[name] = c;
+
+            // budget.selectedTypes.type0 = ['o1', 'o2']
+            // TODO refresh
         }
 
         function onChangeG1() {
@@ -493,7 +547,7 @@
                 return true;
             });
 
-            if(budget.selectedG1fn) {
+            if (budget.selectedG1fn) {
                 budget.dataFiltered.forEach(d => d.g1 = budget.selectedG1fn(d));
             }
 
@@ -570,7 +624,7 @@
             );
 
             const plot = Plot.plot(obj);
-            plot.appendChild(createRectLegend(listLegend, {color: budget.selectedColorScheme}));
+            plot.appendChild(createRectLegend(listLegend, { color: budget.selectedColorScheme }));
             plot.addEventListener('dblclick', e => downloadSVG(e.target, 'years.svg'));
 
             return plot;
@@ -626,7 +680,7 @@
 
             const plot = Plot.plot(obj);
 
-            plot.appendChild(createRectLegend(listLegend, {color: budget.selectedColorScheme}));
+            plot.appendChild(createRectLegend(listLegend, { color: budget.selectedColorScheme }));
             plot.addEventListener('dblclick', e => downloadSVG(e.target, `${type.colOrigin}.svg`));
             return plot;
         }
