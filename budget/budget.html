@@ -487,7 +487,9 @@
             budget.selectedTypes[name] = c;
 
             // budget.selectedTypes.type0 = ['o1', 'o2']
-            // TODO refresh
+            filterBudgetBySelected(budget);
+            refreshSummary(budget);
+            console.log(budget);
         }
 
         function onChangeG1() {
@@ -549,6 +551,18 @@
 
             if (budget.selectedG1fn) {
                 budget.dataFiltered.forEach(d => d.g1 = budget.selectedG1fn(d));
+            }
+
+            // filter types
+            if(budget.selectedTypes) {
+                const types = Object.keys(budget.selectedTypes);
+                types.forEach(type => {
+                    if(budget.selectedTypes[type] && 0 < budget.selectedTypes[type].length) {
+                        const list = budget.selectedTypes[type];
+                        const fnFind = (src) => list.find(item => item === src[type]);
+                        budget.dataFiltered = budget.dataFiltered.filter(fnFind);
+                    }
+                })
             }
 
             return budget.dataFiltered;
