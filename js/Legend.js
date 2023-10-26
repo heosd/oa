@@ -58,8 +58,7 @@ function createRectLegend(list, opt) {
         .text(d => d)
         .attr('x', size + 4)
         .attr('y', 12) // font size
-        .attr('text-anchior', 'left')
-        .attr('fill', color);
+        .attr('text-anchior', 'left');
 
     return svg;
 }
