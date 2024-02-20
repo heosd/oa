@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Image trim with OpenCV.js</title>
+    <style>
+        /* file */
+        #file-area {
+            position: relative;
+        }
+
+        .file-box {
+            width: 170mm;
+            height: 100mm;
+            position: absolute;
+            display: grid;
+            align-items: center;
+        }
+
+        #file {
+            display: absolute;
+            border: 2px dashed grey;
+        }
+
+        #file::file-selector-button {
+            display: no
+        }
+
+        /* section */
+        #section-image {
+            display: none;
+        }
+
+        .header-buttons {
+            display: flex;
+        }
+
+        .header-b1 {
+            flex: 10;
+        }
+
+        .header-b2 {
+            flex: 1;
+            min-width: 400px;
+            text-align: right;
+        }
+
+        .article-canvas {
+            border: solid 1px black;
+            display: inline-block;
+        }
+
+        /* Button */
+        .btn {
+            cursor: pointer;
+            text-align: center;
+            border: 1px solid #999;
+            padding: 12px 24px;
+            min-height: 44px;
+            min-width: 44px;
+            color: #111;
+            background: #ffffff;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+
+        .btn:hover {
+            background: #EEE;
+            outline: 1px solid transparent;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- File -->
+    <section id="section-file">
+        <label id="file-area" for="file">
+            <div class="file-box">
+                <div style="text-align: center;">
+                    <h1>Drag / Select files</h1>
+                </div>
+            </div>
+            <input id="file" type="file" onchange="onChangeFile(this)" class="file-box">
+        </label>
+    </section>
+
+    <!-- Image -->
+    <section id="section-image">
+        <header class="header-buttons">
+            <div class="header-b1">
+                <button onclick="execTrim()" class="btn">Trim</button>
+                <button onclick="execTrimLeft()" class="btn">Trim Left</button>
+                <button onclick="execTrimTop()" class="btn">Trim Top</button>
+                <button onclick="execTrimRight()" class="btn">Trim Right</button>
+                <button onclick="execTrimBottom()" class="btn">Trim Bottom</button>
+                <br>
+                <button onclick="execScaleDownPercent(75)" class="btn">75%</button>
+                <button onclick="execScaleDownPercent(50)" class="btn">50%</button>
+                <button onclick="execScaleDownFixedW(1000)" class="btn">W 1000</button>
+                <button onclick="execScaleDownFixedW(500)" class="btn">W 500</button>
+                <button onclick="execScaleDownFixedH(1000)" class="btn">H 1000</button>
+                <button onclick="execScaleDownFixedH(500)" class="btn">H 500</button>
+            </div>
+            <div class="header-b2">
+                <br> <!-- br required -->
+                <!-- Width x Height -->
+                <span>
+                    <span id="canvasWidth">0</span>
+                    <span> x </span>
+                    <span id="canvasHeight">0</span>
+                </span>
+                <button onclick="execLoadBase()" class="btn">Reload</button>
+                <a id="anchorDownload" href="#" class="btn">Download</a>
+            </div>
+        </header>
+
+        <article class="article-canvas">
+            <canvas id="canvasOutput"></canvas>
+        </article>
+
+    </section>
+
+    <script type="text/javascript">
+        let cvloaded = false;
+        const baseImage = new Image();
+        baseImage.onload = () => {
+            if (cvloaded) {
+                execLoadBase();
+            }
+            console.log(baseImage.width, baseImage.height);
+        };
+
+        function onChangeFile(e) {
+            showSection('section-image');
+            const file = e.files[0];
+            // update filename
+            console.log(file.name);
+            document.getElementById('anchorDownload').download = file.name.replace(/\./, '_trim.');
+            const url = URL.createObjectURL(file);
+            baseImage.src = url;
+        }
+        function showSection(id) {
+            // 'none' to all other sections
+            const sections = Array.from(document.querySelectorAll('section'));
+            sections.forEach(e => {
+                if (id !== e.getAttribute('id')) {
+                    e.style.display = 'none';
+                } else {
+                    e.style.display = 'block';
+                }
+            });
+        }
+
+        function execLoadBase() {
+            let src = cv.imread(baseImage);
+            cv.imshow('canvasOutput', src);
+            src.delete();
+
+            onDoneOutput();
+        }
+
+        function execTrim(l = true, t = true, r = true, b = true) {
+            let src = cv.imread('canvasOutput');
+            let dst = new cv.Mat();
+            let ksize = new cv.Size(5, 5);
+            cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY);
+            cv.Canny(dst, dst, 30, 30, 3, false);
+            cv.threshold(dst, dst, 100, 255, cv.THRESH_BINARY_INV);
+
+            const edges = findTrimEdge(dst, l, t, r, b);
+            console.log(`edges`, edges);
+
+            // zero -> 1 px
+            if (l && 0 === edges.x) {
+                edges.x = 1;
+                edges.w = edges.w - 1;
+            }
+
+            if (t && 0 === edges.y) {
+                edges.y = 1;
+                edges.h = edges.h - 1;
+            }
+
+            // invalid
+            if (!isNaN(edges.x) && !isNaN(edges.y) && !isNaN(edges.w) && !isNaN(edges.h)) {
+                let rect = new cv.Rect(edges.x, edges.y, edges.w, edges.h);
+                const dstroi = src.roi(rect);
+                cv.imshow('canvasOutput', dstroi);
+
+                dstroi.delete();
+            } else {
+                console.log('Failed to find edges');
+            }
+
+            src.delete();
+            dst.delete();
+
+            onDoneOutput
+        }
+
+        function findTrimEdge(dst, l = true, t = true, r = true, b = true) {
+            let vl = l ? lineLR(dst) : 0;
+            let vr = r ? lineRL(dst) : dst.cols;
+            let vt = t ? lineTB(dst) : 0;
+            let vb = b ? lineBT(dst) : dst.data.length / dst.cols;
+
+            const x = vl, y = vt, w = vr - vl, h = vb - vt;
+
+            return { x, y, w, h };
+        }
+
+        function execTrimLeft() {
+            execTrim(true, false, false, false);
+        }
+
+        function execTrimRight() {
+            execTrim(false, false, true, false);
+        }
+
+        function execTrimTop() {
+            execTrim(false, true, false, false);
+        }
+
+        function execTrimBottom() {
+            execTrim(false, false, false, true);
+        }
+
+        function updateCanvasSize() {
+            const ew = document.getElementById('canvasWidth');
+            const eh = document.getElementById('canvasHeight');
+
+            const canvas = document.getElementById('canvasOutput');
+            ew.textContent = canvas.width;
+            eh.textContent = canvas.height;
+        }
+
+        var Module = {
+            // https://emscripten.org/docs/api_reference/module.html#Module.onRuntimeInitialized
+            onRuntimeInitialized() {
+                cvloaded = true;
+
+                if (baseImage.src) {
+                    execLoadBase();
+                }
+
+                return;
+            }
+        };
+
+        function lineLR(mat) {
+            const h = mat.data.length / mat.cols;
+            const min = h * 0.2;
+            const r1 = [], r2 = [];
+            for (let i = 0; i < mat.cols / 2; ++i) {
+                const arr = getMatCols(mat, i);
+                const blacks = countBlack(arr);
+                const s1 = findTheLineStrategySum(blacks);
+                const s2 = findTheLineStrategyMax(blacks);
+                r1.push(s1);
+                r2.push(s2);
+
+                if (s1 > min && s2 > min) {
+                    console.log(`Found it at ${i}`);
+
+                    return i;
+                }
+            }
+        }
+
+        function lineRL(mat) {
+            const h = mat.data.length / mat.cols;
+            const min = h * 0.2;
+            const r1 = [], r2 = [];
+            for (let i = mat.cols; i > mat.cols / 2; --i) {
+                const arr = getMatCols(mat, i);
+                const blacks = countBlack(arr);
+                const s1 = findTheLineStrategySum(blacks);
+                const s2 = findTheLineStrategyMax(blacks);
+                r1.push(s1);
+                r2.push(s2);
+
+                if (s1 > min && s2 > min) {
+                    console.log(`Found it at ${i}`);
+
+                    return i;
+                }
+            }
+        }
+
+        function lineTB(mat) {
+            const h = mat.data.length / mat.cols;
+            const min = h * 0.2;
+            const r1 = [], r2 = [];
+            for (let i = 0; i < h / 2; ++i) {
+                const arr = getMatRows(mat, i);
+                const blacks = countBlack(arr);
+                const s1 = findTheLineStrategySum(blacks);
+                const s2 = findTheLineStrategyMax(blacks);
+                r1.push(s1);
+                r2.push(s2);
+
+                if (s1 > min && s2 > min) {
+                    console.log(`Found it at ${i}`);
+
+                    return i;
+                }
+            }
+        }
+
+        function lineBT(mat) {
+            const h = mat.data.length / mat.cols;
+            const min = h * 0.2;
+            const r1 = [], r2 = [];
+            for (let i = h; i > h / 2; --i) {
+                const arr = getMatRows(mat, i);
+                const blacks = countBlack(arr);
+                const s1 = findTheLineStrategySum(blacks);
+                const s2 = findTheLineStrategyMax(blacks);
+                r1.push(s1);
+                r2.push(s2);
+
+                if (s1 > min && s2 > min) {
+                    console.log(`Found it at ${i}`);
+
+                    return i;
+                }
+            }
+        }
+
+        function findTheLineStrategySum(arrCountBlack) {
+            const min = 2; // ignore the minimum
+
+            const sum = arrCountBlack.filter(d => d >= min).reduce((a, b) => a + b, 0);
+            return sum;
+        }
+
+        function findTheLineStrategyMax(arrCountBlack) {
+            return Math.max(...arrCountBlack);
+        }
+
+        // count consecutive number of black dots fomr the array
+        function countBlack(uintArr) {
+            let cons = 0;
+            const result = [];
+            uintArr.forEach(d => {
+                // black
+                if (0 === d) {
+                    cons++;
+                } else {
+                    if (0 < cons) {
+                        result.push(cons);
+                    }
+                    cons = 0;
+                }
+            });
+            return result;
+        }
+
+        function getMatRows(mat, idx) {
+            const w = mat.cols, h = mat.data.length / mat.cols;
+            if (idx >= h) {
+                return [];
+            }
+
+            const start = idx * w;
+            const result = new Uint8Array(w);
+            for (let i = 0; i < w; ++i) {
+                const at = start + i;
+                result[i] = mat.data[at];
+            }
+
+            return result;
+        }
+
+        function getMatCols(mat, idx) {
+            const w = mat.cols, h = mat.data.length / mat.cols;
+            if (idx >= w) {
+                return [];
+            }
+
+            const result = new Uint8Array(h);
+            for (let i = 0; i < h; ++i) {
+                const at = idx + (i * w);
+                result[i] = mat.data[at];
+            }
+
+            return result;
+        }
+
+        function onDoneOutput() {
+            updateCanvasSize();
+            updateDownload();
+        }
+
+        function updateDownload() {
+            const canvas = document.getElementById('canvasOutput');
+            const url = canvas.toDataURL();
+            document.getElementById('anchorDownload').href = url;
+        }
+
+        function execScaleDownPercent(percent) {
+            let src = cv.imread('canvasOutput');
+            let dst = new cv.Mat();
+            let dsize = new cv.Size(0, 0);
+            cv.resize(src, dst, dsize, percent / 100, percent / 100, cv.INTER_AREA);
+            cv.imshow('canvasOutput', dst);
+            src.delete(); dst.delete();
+
+            onDoneOutput();
+        }
+
+        function execScaleDownFixedW(w) {
+            let src = cv.imread('canvasOutput');
+            const size = src.size();
+            const ratio = w / size.width;
+
+            let dst = new cv.Mat();
+
+            let dsize = new cv.Size(w, ratio * size.height);
+            cv.resize(src, dst, dsize, 0, 0, cv.INTER_AREA);
+            cv.imshow('canvasOutput', dst);
+            src.delete(); dst.delete();
+
+            onDoneOutput();
+        }
+
+        function execScaleDownFixedH(h) {
+            let src = cv.imread('canvasOutput');
+            const size = src.size();
+            const ratio = h / size.height;
+
+            let dst = new cv.Mat();
+
+            let dsize = new cv.Size(ratio * size.width, h);
+            cv.resize(src, dst, dsize, 0, 0, cv.INTER_AREA);
+            cv.imshow('canvasOutput', dst);
+            src.delete(); dst.delete();
+
+            onDoneOutput();
+        }
+
+        // showSection('section-image');
+
+    </script>
+    <script async src="https://cdn.jsdelivr.net/npm/opencv.js-webassembly@4.2.0/opencv.js"
+        type="text/javascript"></script>
+    <!-- <script async src="opencv.js" type="text/javascript"></script> -->
+</body>
+
+</html>
