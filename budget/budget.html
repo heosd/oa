@@ -113,7 +113,6 @@
             position: fixed;
             left: 215mm;
             width: 120mm;
-            display: none;
         }
 
         #area-select-group {
@@ -133,7 +132,10 @@
         <h3 style="display: none">CSV / XLSX</h3>
     </section>
 
-    <section class="root-types">
+    <section class="root-types" style="display: none">
+        <div style="margin-top: 50px; text-align: center;">
+            <button onclick="onClickProceed()" style="width: 50vw; height: 50px;">PROCEED</button>
+        </div>
         <div style="margin: 50px">
             <table>
                 <thead id="table-types-head"></thead>
@@ -173,6 +175,7 @@
     <script src="../js/Generator.js"></script>
     <script src="../js/DataBudget.js"></script>
     <script src="../js/Legend.js"></script>
+    <script src="../js/VType.js"></script>
 
     <script>
         function onChangeFile(e) {
@@ -189,16 +192,41 @@
             const text = await file.text();
             const csv = d3.csvParse(text);
 
+            window.dataSourceCSV = csv;
+
             const types = VType.JudgeLines(csv);
 
             console.log(types);
             console.log(csv.filter((d, i) => 10 > i));
+            showRefreshTableTypes(true);
             refreshTableTypes(types, csv);
+            // hide file selector
+            hideRootSelector();
+        }
+
+        function showRefreshTableTypes(b) {
+            const display = b ? 'block' : 'none';
+            Array.from(document.querySelectorAll('.root-types')).forEach(e => {
+                e.style.display = display;
+            });
+        }
+
+        function showRootSelected(b) {
+            const display = b ? 'block' : 'none';
+            Array.from(document.querySelectorAll('.root-selected')).forEach(e => {
+                e.style.display = display;
+            });
+        }
+
+        function hideRootSelector() {
+            Array.from(document.querySelectorAll('.select-root')).forEach(e => {
+                e.style.display = 'none';
+            });
         }
 
         function createTypeSelect() {
             const select = document.createElement('select');
-            ['X', 'type', 'date', 'price', 'count', 'value'].forEach(d => {
+            ['X', 'type', 'date', 'price', 'count'].forEach(d => {
                 const o = document.createElement('option');
                 o.textContent = d;
                 select.appendChild(o);
@@ -233,6 +261,7 @@
             keys.forEach(k => {
                 const th = document.createElement('th');
                 const select = createTypeSelect();
+                select.setAttribute('data-col', k);
                 mapSelect.set(k, select);
                 th.appendChild(select);
                 htrType.appendChild(th);
@@ -253,212 +282,128 @@
             });
 
             // select by types
-            let dateSelected = false, valueSelected = false;
-            for(const [k, v] of Object.entries(types)) {
+            let dateSelected = false, priceSelected = false;
+            for (const [k, v] of Object.entries(types)) {
                 const eSelect = mapSelect.get(k);
-                if('date' === v && false === dateSelected) {
+                if ('date' === v && false === dateSelected) {
                     eSelect.value = 'date';
                     dateSelected = true;
-                } else if('string' === v) {
+                } else if ('string' === v) {
                     eSelect.value = 'type';
-                } else if('number' === v && false === valueSelected) {
-                    eSelect.value = 'value';
-                    valueSelected = true;
+                } else if ('number' === v && false === priceSelected) {
+                    eSelect.value = 'price';
+                    priceSelected = true;
+                }
+            }
+
+            // rewrite column from localStorage
+            const columnList = localStorage.getItem("columnList");
+            if (columnList) {
+                try {
+                    const list = JSON.parse(columnList);
+                    list.forEach(d => {
+                        const e = mapSelect.get(d.col);
+                        if (e) {
+                            e.value = d.type;
+                        }
+                    });
+                } catch(e) {
+                    localStorage.removeItem('columnList');
                 }
             }
         }
 
-        class VType {
-            static EXP_COMMAG = /,/g;
-            static EXP_DOTG = /\./g;
-            static EXP_MINUSG = /-/g;
-            static EXP_NUM = [/^\-?[0-9.]+$/];
-            static EXP_SPACEG = /\s/g;
-            static EXP_YEARG = /\s*[년월]/g;
-            static EXP_HOURG = /\s*[시분]/g;
+        function onClickProceed() {
+            const h = document.getElementById('table-types-head');
+            const list = [];
+            Array.from(h.querySelectorAll('select')).forEach(e => {
+                const col = e.getAttribute('data-col');
+                const o = { col: col, type: e.value };
+                list.push(o);
+            });
 
-            static IsNumber(str) {
-                const noComma = str.replace(VType.EXP_COMMAG, '');
-                const v = parseFloat(noComma);
-                if (isNaN(v)) {
-                    return false;
-                }
+            const group = d3.group(list, d => d.type);
 
-                const minus = noComma.match(VType.EXP_MINUSG);
-                const dot = noComma.match(VType.EXP_DOTG);
+            const date = group.get('date')?.length;
+            const price = group.get('price')?.length;
+            const count = group.get('count')?.length;
 
-                // --
-                if (minus && 1 < minus.length) {
-                    return false;
-                }
-
-                // ..
-                if (dot && 1 < dot.length) {
-                    return false;
-                }
-
-                return true;
+            if (!date) {
+                alert('no date column');
+                return;
             }
 
-            static TestNumber() {
-                [
-                    ['abcd', false],
-                    ['1234', true],
-                    ['1,2,3,4', true],
-                    ['-123', true],
-                    ['-3.41', true],
-                    ['--3.14', false],
-                    ['3..41', false],
-                    ['.513-123', true],
-                    ['1234-e4', true]
-                ].forEach(d => {
-                    const r = VType.IsNumber(d[0]);
-                    if (r !== d[1]) {
-                        console.error(`Assertion failed`);
-                        console.log(d);
-                    }
-
-                    console.log(r, d[0]);
-                });
+            if (1 < date) {
+                alert('date column should be 1');
+                return;
             }
 
-            static RemoveSpace(str) {
-                return str.replace(VType.EXP_SPACEG, '');
+            if (1 !== price) {
+                alert('price column should be 1');
+                return;
             }
 
-            static IsDate(str) {
-                const date = VType.ToDate(str);
-                if (0 < date.getTime()) {
-                    return true;
-                }
+            // save localstorage
+            localStorage.setItem("columnList", JSON.stringify(list));
 
-                return false;
+            const fnTypeCast = [];
+
+            // date - mandatory
+            const colDate = group.get('date')[0];
+            fnTypeCast.push((obj) => obj[colDate.col] = new Date(obj[colDate.col]));
+            const opt = {
+                date: colDate.col
+            };
+
+            // price - mandatory
+            const colPrice = group.get('price')[0];
+            opt.price = colPrice.col;
+            fnTypeCast.push((obj) => obj[colPrice.col] = parseFloat(obj[colPrice.col]));
+
+            // count - optional
+            if (count) {
+                const colCount = group.get('count')[0];
+                opt.count = colCount.col;
+                fnTypeCast.push((obj) => obj[colCount.col] = parseFloat(obj[colCount.col]));
             }
 
-            static ToDate(str) {
-                const s1 = str.replace(VType.EXP_YEARG, '-').replace(/일/, '');
-                const s2 = s1.replace(VType.EXP_HOURG, ':').replace(/초/, '');
-                const s3 = s2.trim();
+            const listTypes = group.get('type').map(d => d.col);
+            opt.type = listTypes;
 
-                const date = new Date(s3);
+            // type casting data, price, count, value
+            window.dataSourceCSV.forEach(d => {
+                fnTypeCast.forEach(fn => fn(d));
+            });
 
-                return date;
-            }
+            // create budget
+            const budget = new DataBudget();
+            budget.dataSource = window.dataSourceCSV;
+            budget.opt = opt;
 
-            static TestDate() {
-                [
-                    ['2019/10/30', true],
-                    ['2020-01-01', true],
-                    ['2020.01.01', true],
-                    ['2020년1월1일', true],
-                    [' 2020년 1월1일', true],
-                    [' 2020년 1월 1일 ', true],
-                    [' 2020년 1월 1일 12시 20분', true],
-                    [' 2020년 1월 1일 12 시 20   분', true],
-                    [' 2020년 1   월 1일 12 시 20   분 50   초   ', true],
-                ].forEach(d => {
-                    const r = VType.IsDate(d[0]);
-                    if (r !== d[1]) {
-                        console.error(`Assertion failed`);
-                        console.log(d);
-                    }
+            budget.processClone();
+            budget.execDate();
+            budget.execPCV();
+            budget.execType();
+            budget.execYears();
 
-                    console.log(r, d[0]);
-                });
-            }
+            window.getBudget = () => budget;
+            console.log(budget);
 
-            static JudgeLine(line) {
-                const r = {};
-                for (const [k, v] of Object.entries(line)) {
-                    if (true === VType.IsDate(v)) {
-                        r[k] = 'date';
-                    } else if (true === VType.IsNumber(v)) {
-                        r[k] = 'number';
-                    } else {
-                        r[k] = 'string';
-                    }
-                }
+            showRefreshTableTypes(false);
+            showRootSelected(true);
+            refreshUserSelect();
+            filterBudgetBySelected(); // sets budget.dataFiltered
+            refreshUserSelectTypes();
+            // refreshSummary(budget);
 
-                return r;
-            }
-
-            static TestJudgeLine() {
-                const line = {
-                    key1: 'Kim',
-                    key2: '-23.132',
-                    key3: '3.14',
-                    key4: '2020-01-01'
-                };
-
-                const r = VType.JudgeLine(line);
-                console.log(r);
-            }
-
-            static JudgeLines(lines) {
-                // less than 100 lines only
-                const r = lines.filter((d, i) => i < 100).map(VType.JudgeLine);
-                const keys = Object.keys(r[0]);
-                const result = {};
-                keys.forEach(k => {
-                    const counts = d3.rollup(r, v => v.length, d => d[k]);
-                    const gg = d3.greatest(counts, ([, c]) => c);
-                    const type = gg[0]; // ['number', 34]
-                    // console.log(k, type);
-                    result[k] = type;
-                });
-                return result;
-            }
-
-            static TestJudgeLines() {
-                const str = `ts,str,tox,lorem,ipsum,ke,g1,g2,g3,second
-2011-12-05T05:55:47.245Z,F3K6P181 2+6182,6181,24,6182,,DASKROM1_FUS,DAS_A,1_FUS,0
-2011-12-05T05:55:47.576Z,F3K6P181 2+3182,6181,24,6182,,DASKROM1_FUS,DAS_A,1_FUS,0
-2011-12-05T05:55:47.910Z,F3K6P181 2+6182,6181,24,6182,,DASKROM1_FUS,DAS_A,1_FUS,0
-2011-12-05T05:55:48.243Z,F3K6P181 3.9-2182,6181,1.9,6182,0.98091,DASKROM1_FUS,DAS_A,1_FUS,1
-2011-12-05T05:55:48.576Z,F3K6P181 3.9-2549,6181,1.9,2549,0.962745,DASKROM1_FUS,DAS_A,1_FUS,1
-2011-12-05T05:55:48.909Z,F3K6P181 3.9-9912,6181,1.9,9912,0.99956,DASKROM1_FUS,DAS_A,1_FUS,1
-2011-12-05T05:55:49.238Z,F3K6P181 3.9-5959,6181,1.9,9959,0.999795,DASKROM1_FUS,DAS_A,1_FUS,2
-2011-12-05T05:55:49.573Z,F3K6P181 3.9-3970,6181,1.9,9970,0.99985,DASKROM1_FUS,DAS_A,1_FUS,2
-2011-12-05T05:55:49.904Z,F3K6P181 3.9-6970,6181,1.9,9970,0.99985,DASKROM1_FUS,DAS_A,1_FUS,2
-2011-12-05T05:55:50.236Z,F3K6P181 3.9-1969,6181,1.9,9969,0.999845,DASKROM1_FUS,DAS_A,1_FUS,3
-2011-12-05T05:55:50.570Z,F3K6P181 3.9-8970,6181,1.9,9970,0.99985,DASKROM1_FUS,DAS_A,1_FUS,3
-2011-12-05T05:55:50.902Z,F3K6P181 3.9-9969,6181,1.9,9969,0.999845,DASKROM1_FUS,DAS_A,1_FUS,3
-2011-12-05T05:55:51.233Z,F3K6P181 3.9-2969,6181,1.9,9969,0.999845,DASKROM1_FUS,DAS_A,1_FUS,4
-2011-12-05T05:55:51.847Z,F3K6P181 3.9-4969,6181,1.9,9969,0.999845,DASKROM1_FUS,DAS_A,1_FUS,4
-2011-12-05T05:55:51.899Z,F3K6P181 3.9-2969,6181,1.9,9969,0.999845,DASKROM1_FUS,DAS_A,1_FUS,4
-2011-12-05T05:55:52.243Z,F3K6P181 3.9-9969,6181,1.9,9969,0.999845,DASKROM1_FUS,DAS_A,1_FUS,5
-2011-12-05T05:55:52.563Z,F3K6P181 3.9-1969,6181,1.9,9969,0.999845,DASKROM1_FUS,DAS_A,1_FUS,5
-2011-12-05T05:55:52.895Z,F3K6P181 3.9-2969,6181,1.9,9969,0.999845,DASKROM1_FUS,DAS_A,1_FUS,5
-2011-12-05T05:55:53.230Z,F3K6P181 3.9-9968,6181,1.9,9968,0.99984,DASKROM1_FUS,DAS_A,1_FUS,6
-2011-12-05T05:55:53.562Z,F3K6P181 3.9-9970,6181,1.9,9970,0.99985,DASKROM1_FUS,DAS_A,1_FUS,6
-2011-12-05T05:55:53.892Z,F3K6P181 3.9-4970,6181,1.9,9970,0.99985,DASKROM1_FUS,DAS_A,1_FUS,6
-2011-12-05T05:55:54.224Z,F3K6P181 3.9-9968,6181,1.9,9968,0.99984,DASKROM1_FUS,DAS_A,1_FUS,7
-2011-12-05T05:55:54.558Z,F3K6P181 3.9-9970,6181,1.9,9970,0.99985,DASKROM1_FUS,DAS_A,1_FUS,7
-2011-12-05T05:55:54.890Z,F3K6P181 3.9-9969,6181,1.9,9969,0.999845,DASKROM1_FUS,DAS_A,1_FUS,7
-2011-12-05T05:55:55.223Z,F3K6P181 3.9-9970,6181,1.9,9970,0.99985,DASKROM1_FUS,DAS_A,1_FUS,8
-2011-12-05T05:55:55.555Z,F3K6P181 3.9-6968,6181,1.9,9968,0.99984,DASKROM1_FUS,DAS_A,1_FUS,8
-2011-12-05T05:55:55.888Z,F3K6P181 3.9-7971,6181,1.9,9971,0.999855,DASKROM1_FUS,DAS_A,1_FUS,8
-2011-12-05T05:55:56.221Z,F3K6P181 3.9-9970,6181,1.9,9970,0.99985,DASKROM1_FUS,DAS_A,1_FUS,9
-2011-12-05T05:55:56.554Z,F3K6P181 3.9-9969,6181,1.9,9969,0.999845,DASKROM1_FUS,DAS_A,1_FUS,9
-2011-12-05T05:55:56.885Z,F3K6P181 3.9-9971,6181,1.9,9971,0.999855,DASKROM1_FUS,DAS_A,1_FUS,9
-2011-12-05T05:55:57.218Z,F3K6P181 3.9-9969,6181,1.9,9969,0.999845,DASKROM1_FUS,DAS_A,1_FUS,10
-2011-12-05T05:55:57.553Z,F3K6P181 3.9-9970,6181,1.9,9970,0.99985,DASKROM1_FUS,DAS_A,1_FUS,10
-2011-12-05T05:55:57.882Z,F3K6P181 3.9-9970,6181,1.9,9970,0.99985,DASKROM1_FUS,DAS_A,1_FUS,10
-2011-12-05T05:55:58.215Z,F3K6P181 3.9-9970,6181,1.9,9970,0.99985,DASKROM1_FUS,DAS_A,1_FUS,11`;
-                const csv = d3.csvParse(str);
-                const r = VType.JudgeLines(csv);
-                console.log(r);
-            }
+            updateAllRectLegend();
         }
 
-        // VType.TestNumber();
-        // VType.TestDate();
-        // VType.TestJudgeLine();
-        // VType.TestJudgeLines();
     </script>
 
     <script>
         setTimeout(async () => {
+            return;
             const data = await Generator.Generate(300);
 
             const budget = new DataBudget();
@@ -610,7 +555,7 @@
 
             budget.ssType.forEach(type => {
                 const keyType = type.col;
-                const group = d3.rollups(budget.dataFiltered, list => list.reduce((a, b) => a + b.v, 0), d => d[keyType]);
+                const group = d3.rollups(budget.dataFiltered, list => list.reduce((a, b) => a + isNaN(b.v) ? 0 : b.v, 0), d => d[keyType]);
                 const desc = group.toSorted((a, b) => b[1] - a[1]);
 
                 // title
