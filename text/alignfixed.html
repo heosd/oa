@@ -5,53 +5,102 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Align with fixed point</title>
+
+    <style>
+        #section-main {
+            display: flex;
+            height: 80vh;
+        }
+
+        .box {
+            border: solid 1px black;
+            overflow: scroll;
+        }
+
+        .hidden-start {
+            display: none;
+        }
+
+        #area-input-text,
+        #area-input-html {
+            width: 100%;
+            height: 100%;
+            display: none;
+        }
+    </style>
 </head>
 
 <body>
-    <button onclick="onClickFromClipboard()">From Clipboard</button>
-    <br>
+    <section id="section-clipboard">
+        <button onclick="onClickCheckClipboard()">Check Clipboard</button>
+        <div id="area-clipboard"></div>
+        <button onclick="exec('trim')">Trim</button>
+        <button onclick="exec('comma')">Comma</button>
+        <button onclick="exec('removecomma')">RemoveComma</button>
+        <button onclick="exec('fixed', {fixed: 3})">Fixed 3</button>
+        <button onclick="exec('removespace')">Remove Space</button>
+        <button onclick="exec('spacefloat', {space: 3})">Space float 3</button>
+        <br>
+        <button onclick="onClickFromClipboard()">From Clipboard</button>
+    </section>
+
+    <section id="section-main">
+        <article style="flex: 8">
+            <div style="height: 50%" class="box">
+                <pre id="area-input-text"></pre>
+                <div id="area-input-html"></div>
+            </div>
+            <div style="height: 50%" class="box">
+                <pre id="area-output-text"></pre>
+                <div id="area-output-html"></div>
+            </div>
+            <div>two</div>
+        </article>
+        <nav style="flex: 2; display: flex;">
+            <div style="flex: 1; text-align: right; padding-right: 10px">
+                <h1>option</h1>
+                <label for="input-trim">Trim</label>
+                <br>
+                <label for="input-comma">Comma</label>
+                <br>
+                <label for="input-removecomma">Remove comma</label>
+                <br>
+                <label for="input-fixed">Fixed</label>
+                <br>
+                <label for="input-space-float">Space float</label>
+                <br>
+                <label for="input-removespace">Remove space</label>
+                <br>
+
+            </div>
+
+            <div style="flex: 1">
+                <h1 style="color: white;">.</h1>
+                <input type="checkbox" id="input-trim" value="1" checked>
+                <br>
+                <input type="checkbox" id="input-comma" value="1" checked>
+                <br>
+                <input type="checkbox" id="input-removecomma" value="1">
+                <br>
+                <input type="number" id="input-fixed" min="0" max="50" step="1" value="0">
+                <br>
+                <input type="number" id="input-space-float" min="0" max="10" step="1" value="0">
+                <br>
+                <input type="checkbox" id="input-removespace" value="1">
+                <br>
+
+                <br>
+                <button onclick="onClickReset()">Reset</button>
+                <br>
+                <button onclick="onClickProcess()">Process</button>
+                <br>
+                <button onclick="onClickToClipboard()">ToClipboard</button>
+            </div>
+        </nav>
+    </section>
     <div style="display: flex;">
         <div style="flex: 4">
             <textarea id="text-out" style="width: 100%; height: 350px;"></textarea>
-        </div>
-        <div style="flex: 1; text-align: right; padding-right: 10px">
-            <h1>option</h1>
-            <label for="input-trim">Trim</label>
-            <br>
-            <label for="input-comma">Comma</label>
-            <br>
-            <label for="input-removecomma">Remove comma</label>
-            <br>
-            <label for="input-fixed">Fixed</label>
-            <br>
-            <label for="input-space-float">Space float</label>
-            <br>
-            <label for="input-removespace">Remove space</label>
-            <br>
-
-        </div>
-
-        <div style="flex: 1">
-            <h1 style="color: white;">.</h1>
-            <input type="checkbox" id="input-trim" value="1" checked>
-            <br>
-            <input type="checkbox" id="input-comma" value="1" checked>
-            <br>
-            <input type="checkbox" id="input-removecomma" value="1">
-            <br>
-            <input type="number" id="input-fixed" min="0" max="50" step="1" value="0">
-            <br>
-            <input type="number" id="input-space-float" min="0" max="10" step="1" value="0">
-            <br>
-            <input type="checkbox" id="input-removespace" value="1">
-            <br>
-
-            <br>
-            <button onclick="onClickReset()">Reset</button>
-            <br>
-            <button onclick="onClickProcess()">Process</button>
-            <br>
-            <button onclick="onClickToClipboard()">ToClipboard</button>
         </div>
     </div>
 
@@ -59,8 +108,22 @@
         <article id="html-out" style="flex: 1; border: solid 1px black;"></article>
     </div>
 
+    <script src="./string_manipulate.js"></script>
+
     <script>
+        const ds = new Map();
+
+        const einputtext = document.getElementById('area-input-text');
+        const einputhtml = document.getElementById('area-input-html');
+        const eoutputtext = document.getElementById('area-output-text');
+        const eoutputhtml = document.getElementById('area-output-html');
+    </script>
+
+    <script>
+        // todo remove these codes
         let txtOriginal = '', htmlOriginal = '';
+
+
         const eh = document.getElementById('html-out');
         const et = document.getElementById('text-out');
 
@@ -70,6 +133,48 @@
         const efixed = document.getElementById('input-fixed');
         const espacefloat = document.getElementById('input-space-float');
         const eremovespace = document.getElementById('input-removespace');
+
+        async function onClickCheckClipboard() {
+            const contents = await navigator.clipboard.read();
+
+            const item = contents[0];
+
+            const parent = document.getElementById('area-clipboard');
+            parent.innerHTML = '';
+
+            item.types.forEach(d => {
+                const btn = document.createElement('button');
+                btn.textContent = d;
+                btn.addEventListener('click', () => {
+                    fromClipboard(d);
+                });
+                parent.appendChild(btn);
+            });
+        }
+
+        async function fromClipboard(type) {
+            const contents = await navigator.clipboard.read();
+
+            const item = contents[0];
+            const blob = await item.getType(type);
+            const text = await blob.text();
+
+            if (type === 'text/plain') {
+                einputtext.innerText = text;
+                einputtext.style.display = 'block';
+                einputhtml.style.display = 'none';
+            } else if (type === 'text/html') {
+                einputhtml.innerHTML = text;
+                einputtext.style.display = 'none';
+                einputhtml.style.display = 'block';
+            }
+
+            ds.set(type, text); // original
+            ds.set('value', text);
+            ds.set('type', type);
+
+            console.log(ds);
+        }
 
         async function onClickFromClipboard() {
             eh.innerHTML = '';
@@ -99,60 +204,6 @@
             }
         }
 
-        function selectAllText(e) {
-            const result = [];
-            e.childNodes.forEach(d => result.push(...selectAllText(d)));
-
-            if ('#text' === e.nodeName) {
-                result.push(e);
-            }
-
-            return result;
-        }
-
-        function isNumber(str) {
-            const n = Number(str);
-
-            return !isNaN(n);
-        }
-
-        function numberComma(str) {
-            const str2 = str.split('.');
-            if (2 !== str2.length) {
-                return str;
-            }
-
-            const strComma = Number(str2[0]).toLocaleString();
-            return strComma + '.' + str2[1];
-        }
-
-        function removeComma(str) {
-            return str.replace(/,/g, '');
-        }
-
-        function trim(str) {
-            return str.trim();
-        }
-
-        function spaceFloat(str, count = 3) {
-            const str2 = str.split('.');
-            if (2 !== str2.length) {
-                return str;
-            }
-
-            const regSplit = new RegExp(`(\\d{${count}})`);
-
-            return str2[0] + '.' + str2[1].split(regSplit).join(' ').trim();
-        }
-
-        function removeSpaceText(str) {
-            return str.replace(/\s/g, '');
-        }
-
-        function toFixed(str, n) {
-            return Number(str).toFixed(n);
-        }
-
         function onClickReset() {
             et.value = txtOriginal;
             eh.innerHTML = htmlOriginal;
@@ -167,7 +218,7 @@
             });
         }
 
-        async function onClickToClipboard() {
+        async function onClickToClipboardOld() {
             const text = et.value;
             const html = eh.innerHTML;
 
@@ -178,6 +229,66 @@
             ];
 
             await navigator.clipboard.write(data);
+        }
+
+        async function onClickToClipboard() {
+            const type = ds.get('type');
+            const value = ds.get('value');
+
+            if ('text/plain' === type) {
+                const blobText = new Blob([value], { type: 'text/plain' });
+                const data = [
+                    new ClipboardItem({ ['text/plain']: blobText })
+                ];
+
+                await navigator.clipboard.write(data);
+            } else if ('text/html' === type) {
+                const blobHtml = new Blob([value], { type: 'text/html' });
+                const data = [
+                    new ClipboardItem({ ['text/html']: blobHtml })
+                ];
+                await navigator.clipboard.write(data);
+            }
+        }
+
+        function exec(command, arg) {
+            const type = ds.get('type');
+            const value = ds.get('value');
+            let result = '';
+
+            const mapFunc = new Map([
+                ['trim', execTrim],
+                ['comma', execComma],
+                ['removecomma', execRemoveComma],
+                ['fixed', execFixed],
+                ['removespace', execRemoveSpace],
+                ['spacefloat', execSpaceFloat],
+            ]);
+
+            const fn = mapFunc.get(command);
+            if (fn) {
+                result = fn(type, value, arg);
+            } else {
+                alert('Invalid command : ' + command);
+                return;
+            }
+
+            ds.set('value', result);
+            refreshValue();
+        }
+
+        function refreshValue() {
+            const type = ds.get('type');
+            if ('text/plain' === type) {
+                const value = ds.get('value');
+                eoutputtext.innerHTML = value;
+                eoutputtext.style.display = 'block';
+                eoutputhtml.style.display = 'none';
+            } else if ('text/html' === type) {
+                // text/html already set
+                eoutputtext.style.display = 'none';
+                eoutputhtml.style.display = 'block';
+            }
         }
 
         function processString(str) {
