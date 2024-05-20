@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Screen</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+        }
+
+        #content {
+            text-align: center;
+            width: 95vw;
+            height: 95vh;
+        }
+
+        #dialog {
+            position: absolute;
+            left: 50%;
+            top: 30%;
+        }
+
+        .dialog-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            grid-gap: 20px;
+            padding: 5px;
+            text-align: left;
+            ;
+        }
+
+        .text-glitch {
+            animation: glitch 1s linear infinite;
+        }
+
+        @keyframes glitch {
+
+            2%,
+            64% {
+                transform: translate(2px, 0) skew(0deg);
+            }
+
+            4%,
+            60% {
+                transform: translate(-2px, 0) skew(0deg);
+            }
+
+            62% {
+                transform: translate(0, 0) skew(5deg);
+            }
+        }
+
+        .text-glitch:before,
+        .text-glitch:after {
+            content: attr(title);
+            position: absolute;
+            left: 0;
+        }
+
+        .text-glitch:before {
+            animation: glitchTop 1s linear infinite;
+            clip-path: polygon(0 0, 100% 0, 100% 33%, 0 33%);
+            -webkit-clip-path: polygon(0 0, 100% 0, 100% 33%, 0 33%);
+        }
+
+        @keyframes glitchTop {
+
+            2%,
+            64% {
+                transform: translate(2px, -2px);
+            }
+
+            4%,
+            60% {
+                transform: translate(-2px, 2px);
+            }
+
+            62% {
+                transform: translate(13px, -1px) skew(-13deg);
+            }
+        }
+
+        .text-glitch:after {
+            animation: glitchBotom 1.5s linear infinite;
+            clip-path: polygon(0 67%, 100% 67%, 100% 100%, 0 100%);
+            -webkit-clip-path: polygon(0 67%, 100% 67%, 100% 100%, 0 100%);
+        }
+
+        @keyframes glitchBotom {
+
+            2%,
+            64% {
+                transform: translate(-2px, 0);
+            }
+
+            4%,
+            60% {
+                transform: translate(-2px, 0);
+            }
+
+            62% {
+                transform: translate(-22px, 5px) skew(21deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <section style="width: 100vw; height: 100vh; background-color: #222;">
+        <p id="content" contenteditable="true" class="text-glitch">RClick</p>
+    </section>
+
+    <dialog id="dialog" open>
+        <div class="dialog-grid">
+            <label id="dialog-font-size">Font Size</label>
+            <input id="dialog-font-size" type="range" min="1" max="30" onchange="onChangeFontSize(this.value)">
+            <label for="dialog-font-color">Font Color</label>
+            <input id="dialog-font-color" type="color" onchange="onChangeColor(this.value)">
+            <label for="dialog-font-bgcolor">Background Color</label>
+            <input id="dialog-font-bgcolor" type="color" onchange="onChangeBGColor(this.value)">
+            <label for="dialog-effect-glitch">Glitch</label>
+            <input id="dialog-effect-glitch" type="checkbox" onchange="onChangeGlitch(this.checked)">
+            <button onclick="onClickReset()">Reset</button>
+            <form method="dialog">
+                <button style="padding: 3px;">Dismiss</button>
+            </form>
+        </div>
+    </dialog>
+
+    <script>
+        let style = {
+            color: '#FFFFFF',
+            bg: '#222222',
+            fontSize: 15,
+            glitch: false,
+        };
+
+        const content = document.getElementById('content');
+
+        document.getElementById('dialog-font-size').value = style.fontSize;
+        document.getElementById('dialog-font-color').value = style.color;
+        document.getElementById('dialog-font-bgcolor').value = style.bg;
+
+        addEventListener('contextmenu', () => {
+            document.getElementById('dialog').show();
+        });
+
+        content.addEventListener('input', () => savePreference());
+
+        function onChangeFontSize(size) {
+            style.fontSize = size;
+
+            refreshView();
+        }
+
+        function onChangeColor(color) {
+            style.color = color;
+
+            refreshView();
+        }
+
+        function onChangeBGColor(color) {
+            style.bg = color;
+
+            refreshView();
+        }
+
+        function onChangeGlitch(b) {
+            style.glitch = b;
+
+            refreshView();
+        }
+
+        function refreshView() {
+            content.style.fontSize = style.fontSize + 'rem';
+            content.style.color = style.color;
+            if (style.glitch) {
+                content.className = 'text-glitch';
+            } else {
+                content.className = '';
+            }
+            document.querySelector('section').style.backgroundColor = style.bg;
+
+            savePreference();
+        }
+
+        function savePreference() {
+            style.text = content.textContent;
+
+            localStorage.setItem('preference', JSON.stringify(style));
+        }
+
+        function loadPreference() {
+            const v = localStorage.getItem('preference');
+            if (v) {
+                style = JSON.parse(v);
+                console.log(style);
+                content.textContent = style.text;
+            }
+        }
+
+        function onClickReset() {
+            localStorage.removeItem('preference');
+
+            style = {
+                color: '#FFFFFF',
+                bg: '#222222',
+                fontSize: 15,
+                glitch: false,
+                text: 'RClick'
+            }
+
+            content.textContent = style.text;
+
+            refreshView();
+        }
+
+        const awake = () => {
+            let wakeLock = null;
+
+            async function awake() {
+                try {
+                    wakeLock = await navigator.wakeLock.request("screen");
+                    console.log('Wake lock');
+                } catch (err) {
+                    console.log('Wake lock failure');
+                    console.log(`${err.name}, ${err.message}`);
+                }
+            }
+
+            async function awakeRelease() {
+                wakeLock.release().then(() => {
+                    wakeLock = null;
+                    console.log('Released');
+                });
+            }
+
+
+            function action(b) {
+                if(b) {
+                    awake();
+                } else {
+                    awakeRelease();
+                }
+            }
+
+            return action;
+        }
+
+        const w = awake();
+        w(true);
+
+        loadPreference();
+        refreshView();
+    </script>
+</body>
+
+</html>
