@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Budget simple</title>
+</head>
+
+<body>
+
+    <section id="section-input-url">
+        <input id="inputURL" type="text" placeholder="url to csv">
+        <button onclick="onClickFetch()">Fetch</button>
+    </section>
+
+    <section id="section-select-cols">
+        <label for="select-date">Select Date column</label>
+        <select id="select-date"></select>
+        <br>
+        <label for="select-cost">Select Cost column</label>
+        <select id="select-cost"></select>
+        <br>
+        <label for="select-user">Select User column</label>
+        <select id="select-user"></select>
+        <br>
+        <label for="select-product">Select Product column</label>
+        <select id="select-product"></select>
+        <br>
+        <input id="input-product-deposit" type="text" value="deposit">
+
+        <br>
+
+        <button onclick="proceedSelectCols()">GO!</button>
+    </section>
+
+    <section id="section-plot"></section>
+
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6"></script>
+
+    <script>
+        const testProcedure = true;
+
+        async function onClickFetch() {
+            const url = document.getElementById('inputURL').value.trim();
+            if (5 > url.length) {
+                alert("Invalid url");
+                return;
+            }
+
+            let finalurl = url;
+            // google spreadsheet adjusting
+            if (-1 < url.indexOf('http')) {
+                const matchEdit = url.match(/https:\/\/docs.google.com\/spreadsheets\/d\/([^/]+)\/edit/);
+                if (matchEdit) {
+                    finalurl = `https://docs.google.com/spreadsheets/d/${matchEdit[1]}/pub?gid=0&single=true&output=csv`;
+                }
+            }
+
+            try {
+                console.log('fetch : ' + finalurl);
+                const res = await fetch(finalurl);
+                const text = await res.text();
+                const csv = processCSV(text);
+                postProcessCSV(csv);
+            } catch (e) {
+                alert('Failed to get data from url');
+                console.error(e);
+            }
+        }
+
+        function processCSV(text) {
+            const csv = d3.csvParse(text);
+            return csv;
+        }
+
+        function postProcessCSV(csv) {
+            setDataSourceRawCSV(csv);
+            refreshSelectCols();
+        }
+
+        // list + columns
+        function setDataSourceRawCSV(csv) {
+            window.dataSourceRaw = csv;
+            window.dataSourceRawColumns = csv.columns;
+        }
+
+        // list date, cost, user, prod 4 columns only!
+        function setDataSource(json) {
+            const ds = json;
+            window.dataSource = ds;
+
+            console.log(ds);
+
+            const count = ds.length;
+            const countDate = d3.count(ds.map(d => d.date));
+            const countCost = d3.count(ds.map(d => !isNaN(d.cost)));
+            const groupUser = d3.groups(ds, d => d.user);
+            const countUser = groupUser.length;
+            const countDeposit = ds.filter(d => d.prod === window.dataSourceCols.deposit).length;
+
+            console.log(`date : ${countDate} / ${count}`);
+            console.log(`cost : ${countCost} / ${count}`);
+            console.log(`user : ${countUser}`);
+            console.log(`deposit : ${countDeposit}`);
+
+            const mapYears = ssDataSource();
+            window.dataSourceMapYears = mapYears;
+            console.log(mapYears);
+        }
+
+        function ssDataSource() {
+            const ds = window.dataSource;
+
+            // split by year
+            const mapYears = d3.rollup(ds, list => {
+                const ss = ssUser(list);
+                ss.year = list[0].date.getFullYear();
+                return ss;
+            }, d => d.date.getFullYear());
+
+            return mapYears;
+        }
+
+        // total income, outcome by user
+        // ${deposit} => in / out
+        function ssUser(src) {
+            const valueDeposit = window.dataSourceCols.deposit;
+
+            const total = d3.rollups(src, (listUser) => {
+                // income, outcome by prod === ${deposit}
+                const sep = d3.rollup(listUser, (listInOut) => {
+                    return d3.sum(listInOut, d => d.cost);
+                },
+                    d => valueDeposit === d.prod ? 'income' : 'outcome');
+
+                const ic = sep.get('income') ?? 0;
+                const oc = sep.get('outcome') ?? 0;
+                const rest = ic - oc;
+                let spentpercent = (oc / ic) * 100;
+                if (isNaN(spentpercent)) {
+                    spentpercent = 101;
+                }
+                const restpercent = 100 - spentpercent;
+
+
+                return {
+                    totalincome: ic,
+                    totaloutcome: oc,
+                    user: listUser[0].user,
+                    rest,
+                    spentpercent,
+                    restpercent,
+                }
+            }, d => d.user).map(d => d[1]);
+
+            return total;
+        }
+
+        function refreshSelectCols() {
+            if (!window.dataSourceRawColumns) {
+                return;
+            }
+
+            const src = window.dataSourceRawColumns;
+
+            // function createOptions
+            const createOptions = () => {
+                return src.map(d => {
+                    const opt = document.createElement('option');
+                    opt.textContent = d;
+                    opt.value = d;
+                    return opt;
+                });
+            }
+
+            // create Options for all
+            const listSelect = document.getElementById('section-select-cols').querySelectorAll('select');
+            listSelect.forEach(e => createOptions().forEach(opt => e.appendChild(opt)));
+
+            // default
+            const selectDate = document.getElementById('select-date');
+            const selectCost = document.getElementById('select-cost');
+            const selectUser = document.getElementById('select-user');
+            const selectProd = document.getElementById('select-product');
+
+            const listDefaultDate = ['date'];
+            const listDefaultCost = ['cost', 'price'];
+            const listDefaultUser = ['user', 'group', 'type'];
+            const listDefaultProd = ['product'];
+
+            const foundDate = Array.from(selectDate.querySelectorAll('option')).filter(d => listDefaultDate.some(key => -1 < d.value.toLocaleLowerCase().indexOf(key)));
+            const foundCost = Array.from(selectCost.querySelectorAll('option')).filter(d => listDefaultCost.some(key => -1 < d.value.toLocaleLowerCase().indexOf(key)));
+            const foundUser = Array.from(selectUser.querySelectorAll('option')).filter(d => listDefaultUser.some(key => -1 < d.value.toLocaleLowerCase().indexOf(key)));
+            const foundProd = Array.from(selectProd.querySelectorAll('option')).filter(d => listDefaultProd.some(key => -1 < d.value.toLocaleLowerCase().indexOf(key)));
+
+            // set default if exists
+            foundDate ? (selectDate.value = foundDate[0].value) : 0;
+            foundCost ? (selectCost.value = foundCost[0].value) : 0;
+            foundUser ? (selectUser.value = foundUser[0].value) : 0;
+            foundProd ? (selectProd.value = foundProd[0].value) : 0;
+        }
+
+        function proceedSelectCols() {
+            const selectDate = document.getElementById('select-date');
+            const selectCost = document.getElementById('select-cost');
+            const selectUser = document.getElementById('select-user');
+            const selectProd = document.getElementById('select-product');
+            const inputProd = document.getElementById('input-product-deposit');
+
+            const cols = {
+                date: selectDate.value,
+                cost: selectCost.value,
+                user: selectUser.value,
+                prod: selectProd.value,
+                deposit: inputProd.value,
+            };
+            window.dataSourceCols = cols;
+
+            const ds = window.dataSourceRaw.map(d => {
+                const obj = {
+                    date: new Date(d[cols.date]),
+                    cost: parseFloat(d[cols.cost]),
+                    user: d[cols.user],
+                    prod: d[cols.prod],
+                    item: d
+                };
+
+                return obj;
+            });
+
+            setDataSource(ds);
+            refreshPlot();
+        }
+
+        function refreshPlot() {
+            const mapYears = window.dataSourceMapYears;
+            mapYears.forEach((_, k) => refreshPlotOneYear(k));
+            mapYears.forEach((_, k) => refreshTableOneYear(k));
+        }
+
+        function refreshTableOneYear(year) {
+            const p = document.getElementById('section-plot');
+            const mapYears = window.dataSourceMapYears;
+            const ss = mapYears.get(year);
+            const colY = window.dataSourceCols.cost;
+
+            const sssorted = ss.toSorted((a, b) => b.totalincome - a.totalincome);
+
+            const table = document.createElement('table');
+            const tbody = document.createElement('tbody');
+
+            const orderObj = (obj) => [
+                obj.user,
+                obj.totalincome.toLocaleString(),
+                obj.totaloutcome.toLocaleString(),
+                obj.spentpercent.toFixed(1) + '%',
+                obj.rest.toLocaleString(),
+                obj.restpercent.toFixed(1) + '%',
+            ];
+
+            const createTR = (datas) => {
+                const tr = document.createElement('tr');
+                datas.forEach(d => {
+                    const td = document.createElement('td');
+                    td.textContent = d;
+                    tr.appendChild(td);
+                });
+
+                // style, not a good code!
+                tr.querySelectorAll('td').forEach((d, i) => {
+                    if(0 < i) {
+                        d.style.textAlign = 'right'
+                    }
+                });
+
+                return tr;
+            }
+
+            sssorted.forEach(d => {
+                tbody.appendChild(createTR(orderObj(d)));
+            });
+
+            table.appendChild(tbody);
+
+            p.appendChild(table);
+        }
+
+        function refreshPlotOneYear(year) {
+            const p = document.getElementById('section-plot');
+            const mapYears = window.dataSourceMapYears;
+            const ss = mapYears.get(year);
+            const colY = window.dataSourceCols.cost;
+
+            console.log(ss);
+            // const color200 = d3.scaleSequential([0, 200], d3.interpolateRdBu);
+            const colorLevel = [
+                [120, 'red'],
+                [100, '#ff4000'],
+                [80, '#97f297'], // green
+                [50, '#fff2b3'], // yellow
+                [0, '#fff2b3'], // yellow
+                [-1000, 'red']
+            ];
+            const colorGray = (p) => colorLevel.find(d => d[0] < p)[1];
+
+            // best Budget - product filter reverse
+            const plotTotal = Plot.plot({
+                title: `${year} Total income / outcome`,
+                style: {fontSize: 15},
+                y: { tickFormat: "s", grid: true, label: colY },
+                marks: [
+                    Plot.frame(),
+                    Plot.barY(ss, {
+                        x: 'user',
+                        y: 'totalincome',
+                        sort: { x: "y", reverse: true },
+                        fill: "#aaa",
+                    }),
+                    Plot.barY(ss, {
+                        x: 'user',
+                        y: 'totaloutcome',
+                        sort: { x: "y", reverse: true },
+                        fill: d => colorGray(d.spentpercent),
+                        insetLeft: 10,
+                        insetRight: 10,
+                    }),
+                    Plot.tip(ss, Plot.pointer({
+                        x: 'user',
+                        y: 'totalincome',
+                        title: d => `${d.totaloutcome.toLocaleString()} / ${d.totalincome.toLocaleString()} (${d.spentpercent.toFixed(1)}%)\nRest : ${d.rest.toLocaleString()}(${d.restpercent.toFixed(1)}%)`
+                    })),
+
+                    Plot.ruleY([0])
+                ]
+            });
+
+            p.appendChild(plotTotal)
+
+
+        }
+
+        async function testFetch() {
+            document.getElementById('inputURL').value = './receipttest.csv';
+            await onClickFetch();
+            proceedSelectCols();
+        }
+
+
+        // test
+        (() => {
+            if (true === testProcedure) {
+                testFetch();
+            }
+        })();
+
+    </script>
+</body>
+
+</html>
