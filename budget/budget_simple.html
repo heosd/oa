@@ -6,7 +6,48 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Budget simple</title>
     <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        @page {
+            size: A4;
+            marks: crop cross;
+        }
+
+        section {
+            width: 210mm;
+            height: 297mm;
+            margin: 0 auto;
+            border: 1px solid black;
+            display: block;
+            padding: 0.5cm 0.5cm 0.5cm 0.5cm;
+        }
+
+        #area-input-data {
+            margin-top: 2rem;
+        }
+
+        input[type=file] {
+            width: 500px;
+        }
+
+        input[type=file]::file-selector-button {
+            width: 350px;
+            height: 50px;
+            background: #fff;
+            border: 1px solid black;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+
+        input[type=file]::file-selector-button:hover {
+            background: #555;
+            color: #fff;
+        }
+
         .ss-table {
+            width: 100%;
             font-family: arial, sans-serif;
             border-collapse: collapse;
 
@@ -19,40 +60,102 @@
             tr:nth-child(even) {
                 background-color: #eee;
             }
+
+            td:nth-child(n+2) {
+                text-align: right;
+            }
+
+        }
+
+        #table-select-cols {
+            width: 100%;
+
+            select,
+            input {
+                width: 100%;
+            }
+        }
+
+        #table-json1 {
+            table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+
+            td,
+            th {
+                border: 1px solid black;
+                padding: 5px;
+                max-width: 100px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
         }
     </style>
 </head>
 
 <body>
 
-    <section id="section-input-url">
-        <input id="inputURL" type="text" placeholder="url to csv">
-        <button onclick="onClickFetch()">Fetch</button>
+    <section id="section-input">
+        <nav>
+            <button onclick="onClickReset()">0. Reset</button>
+            <button onclick="view.showArea('input-user')">1. Import Data</button>
+            <button onclick="view.showArea('input-data')">2. Postprocess</button>
+        </nav>
+        <div id="area-input-user">
+            <h1>1. Import your data</h1>
+            <h2>CSV - url</h2>
+            <input id="inputURL" type="text" placeholder="url to csv">
+            <button onclick="onClickFetch()">Load CSV</button>
+            <h2>CSV - local file</h2>
+            <input type="file" id="input-file" onchange="onChangeFile(this)">
+        </div>
+
+        <div id="area-input-data">
+            <div id="table-raw">
+                <h1>2. Check your data</h1>
+                <table-json id="table-json1"></table-json>
+            </div>
+
+            <br>
+            <hr>
+            <br>
+
+            <div id="form-select-cols">
+                <h1>3. Select columns</h1>
+                <table id="table-select-cols">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Cost</th>
+                            <th>User</th>
+                            <th>Product</th>
+                            <th>Product-deposit</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><select id="select-date" data-key="d"></select></td>
+                            <td><select id="select-cost" data-key="c"></select></td>
+                            <td><select id="select-user" data-key="u"></select></td>
+                            <td><select id="select-product" data-key="p"></select></td>
+                            <td><input id="input-product-deposit" type="text" value="deposit" data-key="pp"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <br>
+
+            <button style="width: 100%; height: 50px;" onclick="onClickProceed()">PROCEED</button>
+        </div>
     </section>
 
-    <section id="section-select-cols">
-        <label for="select-date">Select Date column</label>
-        <select id="select-date"></select>
-        <br>
-        <label for="select-cost">Select Cost column</label>
-        <select id="select-cost"></select>
-        <br>
-        <label for="select-user">Select User column</label>
-        <select id="select-user"></select>
-        <br>
-        <label for="select-product">Select Product column</label>
-        <select id="select-product"></select>
-        <br>
-        <input id="input-product-deposit" type="text" value="deposit">
+    <!-- sections will be here by years -->
+    <div id="area-section-results"></div>
 
-        <br>
-
-        <button onclick="app.execCSVtoDataSource()">GO!</button>
-    </section>
-
-    <section id="section-plot"></section>
-    <section id="section-table"></section>
-
+    <!-- Invisible area -->
     <section id="section-templates" style="display: none;">
         <template id="template-table">
             <table class="ss-table">
@@ -72,11 +175,16 @@
         </template>
     </section>
 
-    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6"></script>
+    <!-- <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6"></script> -->
+    <script src="/ext/d3@7.js"></script>
+    <script src="/ext/plot@0.6"></script>
+    <script src="/js/TableJSON.js"></script>
 
     <script>
-        const testProcedure = true;
+        function onClickReset() {
+            location.href = location.pathname;
+        }
 
         async function onClickFetch() {
             const url = document.getElementById('inputURL').value.trim();
@@ -94,11 +202,13 @@
                 }
             }
 
+            let fetchedData = undefined;
             try {
                 console.log('fetch : ' + finalurl);
                 const res = await fetch(finalurl);
                 const text = await res.text();
-                app.execCSV(text);
+                fetchedData = text;
+
 
                 // const csv = processCSV(text);
                 // postProcessCSV(csv);
@@ -106,6 +216,26 @@
                 alert('Failed to get data from url');
                 console.error(e);
             }
+
+            // show
+            if (fetchedData) {
+                app.ds.setSrc(DataSource.SRC_TYPE_URL, url);
+                app.execCSV(fetchedData);
+            }
+        }
+
+        async function onChangeFile(e) {
+            const input = document.getElementById('input-file');
+            const file = input.files[0];
+            app.ds.setSrc = ('local', file.name);
+            const text = await file.text();
+            app.execCSV(text);
+        }
+
+        // todo replcae history with arguments
+        function onClickProceed() {
+            view.updateURLHistory();
+            app.execCSVtoDataSource();
         }
 
         class BudgetApp {
@@ -116,7 +246,9 @@
                 this.ds.raw = csv;
                 this.ds.rawcols = csv.columns;
 
-                view.refreshSelectCols(this.ds.rawcols);
+                view.showArea('input-data');
+                view.updateRaw(this.ds.raw);
+                view.updateSelectCols(this.ds.rawcols);
             }
 
             execCSVtoDataSource() {
@@ -128,8 +260,7 @@
                 this.ds.ds = ds;
 
                 this.batchDataSource();
-                this.refreshTable();
-                this.refreshPlot();
+                this.refreshPlotTable();
             }
 
             batchDataSource() {
@@ -144,26 +275,23 @@
                 });
             }
 
-            refreshTable() {
-                const years = this.ds.getYearKeys();
-
-                years.forEach(year => {
-                    const ss = this.ds.getYearSS(year);
-                    const table = view.createTableOneYear(ss);
-                    view.appendTableOneYear(table);
-                });
-            }
-
-            refreshPlot() {
+            refreshPlotTable() {
                 const years = this.ds.getYearKeys();
                 const cols = view.getColumnSelect();
+                view.clearResults();
+
                 years.forEach(year => {
                     const list = this.ds.getYear(year);
-                    const table = view.createPlotOneYear(list, cols);
-                    view.appendPlotOneYear(table);
-                });
-            }
+                    const ss = this.ds.getYearSS(year);
 
+                    const section = view.appendSectionOneYear(year);
+                    const table = view.createTableOneYear(ss);
+                    const plot = view.createPlotOneYear(list, cols);
+                    section.appendChild(plot);
+                    section.appendChild(table);
+                });
+
+            }
         }
 
         class pp {
@@ -244,10 +372,39 @@
 
         class DataSource {
             // data sources
+            #srcType = undefined; // 'url' or 'local'
+            srcURL = undefined;
             raw = undefined;
             rawcols = undefined;
             ds = undefined;
             mapYear = undefined;
+
+            static SRC_TYPE_URL = 'URL';
+            static SRC_TYPE_LOCAL = 'LOCAL';
+
+            set srcType(type) {
+                const list = [DataSource.SRC_TYPE_URL, DataSource.SRC_TYPE_URL];
+                const valid = list.find(d => d === type);
+                if (valid) {
+                    this.#srcType = type;
+                } else {
+                    console.error(`invalid type, ${type}`);
+                }
+            }
+
+            get srcType() { return this.#srcType };
+
+            setSrc(type, url) {
+                this.srcType = type;
+                this.srcURL = url;
+            }
+
+            getSrc() {
+                return {
+                    srcType: this.srcType,
+                    srcURL: this.srcURL,
+                }
+            }
 
             getYear(year) {
                 return this.mapYear?.get(year)
@@ -264,6 +421,7 @@
 
         class BudgetView {
             // function createOptions
+            static INPUT_IDS = ['select-date', 'select-cost', 'select-user', 'select-product', 'input-product-deposit'];
             static createOptions = (list) => {
                 return list.map(d => {
                     const opt = document.createElement('option');
@@ -284,11 +442,39 @@
                 return tr;
             }
 
-            static refreshSelectCols(cols) {
+            static hideBut(listIds, id) {
+                listIds.filter(d => d !== id).forEach(d => {
+                    document.getElementById(d).style.display = 'none';
+                });
+
+                document.getElementById(id).style.display = 'block';
+            }
+
+            static showArea(area) {
+                const listIdsInput = ['area-input-user', 'area-input-data']
+                if ('input-user' === area) {
+                    BudgetView.hideBut(listIdsInput, listIdsInput[0]);
+                } else if ('input-data' === area) {
+                    BudgetView.hideBut(listIdsInput, listIdsInput[1]);
+                }
+            }
+
+            static updateRaw(raw) {
+                const table = document.getElementById('table-json1');
+                table.setDataSource(raw);
+            }
+
+            static clearResults() {
+                const ids = ['section-plot', 'section-table'];
+                ids.forEach(d => document.getElementById(d).innerHTML = '');
+            }
+
+            static updateSelectCols(cols) {
                 const src = cols;
 
                 // create Options for all
-                const listSelect = document.getElementById('section-select-cols').querySelectorAll('select');
+                const listSelect = document.getElementById('form-select-cols').querySelectorAll('select');
+                listSelect.forEach(e => e.innerHTML = '');
                 listSelect.forEach(e => view.createOptions(src).forEach(opt => e.appendChild(opt)));
 
                 // default
@@ -298,9 +484,18 @@
                 const selectProd = document.getElementById('select-product');
 
                 const listDefaultDate = ['date'];
-                const listDefaultCost = ['cost', 'price'];
+                const listDefaultCost = ['cost', 'price', 'amount'];
                 const listDefaultUser = ['user', 'group', 'type'];
                 const listDefaultProd = ['product'];
+
+                const dp = selectDate.getAttribute('data-param');
+                const cp = selectCost.getAttribute('data-param');
+                const up = selectUser.getAttribute('data-param');
+                const pp = selectProd.getAttribute('data-param');
+                (dp) && listDefaultDate.unshift(dp);
+                (cp) && listDefaultCost.unshift(cp);
+                (up) && listDefaultUser.unshift(up);
+                (pp) && listDefaultProd.unshift(pp);
 
                 const foundDate = Array.from(selectDate.querySelectorAll('option')).filter(d => listDefaultDate.some(key => -1 < d.value.toLocaleLowerCase().indexOf(key)));
                 const foundCost = Array.from(selectCost.querySelectorAll('option')).filter(d => listDefaultCost.some(key => -1 < d.value.toLocaleLowerCase().indexOf(key)));
@@ -308,10 +503,10 @@
                 const foundProd = Array.from(selectProd.querySelectorAll('option')).filter(d => listDefaultProd.some(key => -1 < d.value.toLocaleLowerCase().indexOf(key)));
 
                 // set default if exists
-                foundDate ? (selectDate.value = foundDate[0].value) : 0;
-                foundCost ? (selectCost.value = foundCost[0].value) : 0;
-                foundUser ? (selectUser.value = foundUser[0].value) : 0;
-                foundProd ? (selectProd.value = foundProd[0].value) : 0;
+                foundDate.length ? (selectDate.value = foundDate[0].value) : 0;
+                foundCost.length ? (selectCost.value = foundCost[0].value) : 0;
+                foundUser.length ? (selectUser.value = foundUser[0].value) : 0;
+                foundProd.length ? (selectProd.value = foundProd[0].value) : 0;
             }
 
             static getColumnSelect() {
@@ -391,32 +586,117 @@
                 return plot;
             }
 
-            static appendTableOneYear(table) {
-                const p = document.getElementById('section-table');
-                p.appendChild(table);
+            static clearResults() {
+                document.getElementById('area-section-results').innerHTML = '';
             }
 
-            static appendPlotOneYear(plot) {
+            static appendSectionOneYear(year) {
+                const p = document.getElementById('area-section-results');
+                const idSection = `#section-result-${year}`;
+                let sectionYear = p.querySelector(idSection);
+
+                if (!sectionYear) {
+                    sectionYear = document.createElement('section');
+                    sectionYear.id = idSection;
+                    p.appendChild(sectionYear);
+                }
+
+                return sectionYear;
+            }
+
+            static appendTableOneYear(table, year) {
+                const p = document.getElementById('area-section-results');
+                const idSection = `#section-result-${year}`;
+                let sectionYear = p.querySelector(idSection);
+                if (!sectionYear) {
+                    sectionYear = document.createElement('section');
+                    sectionYear.id = idSection;
+                    p.appendChild(sectionYear);
+                }
+            }
+
+            static appendPlotOneYear(plot, year) {
                 const p = document.getElementById('section-plot');
                 p.appendChild(plot);
             }
+
+            static updateURLHistory() {
+                const ids = BudgetView.INPUT_IDS;
+
+                const search = new URLSearchParams();
+
+                // input url, srcType='url' only
+                const src = app.ds.getSrc();
+                if(DataSource.SRC_TYPE_URL === src.srcType) {
+                    search.set('srcType', DataSource.SRC_TYPE_URL);
+                    search.set('srcURL', src.srcURL);
+                }
+
+                ids.forEach(id => {
+                    const e = document.getElementById(id);
+                    const k = e.getAttribute('data-key');
+                    const v = e.value;
+                    search.set(k, v);
+                });
+
+                const searchStr = search.toString();
+
+                window.history.replaceState(null, '', location.pathname + '?' + searchStr);
+            }
+
+            static parseParams() {
+                const ids = BudgetView.INPUT_IDS;
+                const inputs = ids.map(id => document.getElementById(id));
+
+                const search = new URLSearchParams(window.location.search);
+
+                for (const [k, v] of search.entries()) {
+                    const eleFound = inputs.find(e => k === e.getAttribute('data-key'));
+                    if (eleFound) {
+                        eleFound.value = v;
+                        eleFound.setAttribute('data-param', v);
+                    }
+                }
+
+                // srcType, srcURL
+                if(DataSource.SRC_TYPE_URL === search.get('srcType')) {
+                    const url = search.get('srcURL');
+                    const eURL = document.getElementById('inputURL');
+                    eURL.value = url;
+                }
+
+            }
+
+            static autoFetch() {
+                const url = document.getElementById('inputURL').value;
+                if(5 < url.length) {
+                    onClickFetch();
+                }
+            }
+
         }
 
         const app = new BudgetApp();
         const view = BudgetView;
 
         async function testFetch() {
-            document.getElementById('inputURL').value = './receipttest.csv';
+            document.getElementById('inputURL').value = './1111.csv';
             await onClickFetch();
             app.execCSVtoDataSource();
         }
 
         function main() {
+            TableJSON.init();
+            view.parseParams();
+            // no await, just run
+            view.autoFetch();
         }
 
         // test
         (() => {
             main(); // params
+            const testProcedure = false;
+
             if (true === testProcedure) {
                 testFetch();
             }
